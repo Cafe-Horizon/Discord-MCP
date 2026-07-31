@@ -1,0 +1,72 @@
+name: Update Discord Endpoint Definitions
+
+# Keeps src/main/resources/discord_endpoints.json in sync with Discord's
+# official OpenAPI spec (https://github.com/discord/discord-api-spec) without
+# any manual spec-reading. When Discord adds, removes, or changes REST
+# endpoints, this workflow regenerates the manifest and opens a PR — the
+# server itself needs zero code changes, since RestToolRegistrar generates
+# one MCP tool per entry in that file at startup.
+
+on:
+  schedule:
+    # Every Monday at 03:00 UTC. Adjust as desired; this just needs to run
+    # more often than Discord ships breaking API changes.
+    - cron: "0 3 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Regenerate discord_endpoints.json
+        run: python3 scripts/generate_discord_endpoints.py
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet -- src/main/resources/discord_endpoints.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summarize endpoint diff
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          python3 - <<'EOF'
+          import json, subprocess
+          old = subprocess.run(["git", "show", "HEAD:src/main/resources/discord_endpoints.json"], capture_output=True, text=True).stdout
+          old_ids = {e["operationId"] for e in json.loads(old)}
+          new_ids = {e["operationId"] for e in json.loads(open("src/main/resources/discord_endpoints.json").read())}
+          added = sorted(new_ids - old_ids)
+          removed = sorted(old_ids - new_ids)
+          print(f"Added ({len(added)}): {added}")
+          print(f"Removed ({len(removed)}): {removed}")
+          EOF
+
+      - name: Open pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: regenerate discord_endpoints.json from upstream OpenAPI spec"
+          title: "Discord API spec drift: regenerate discord_endpoints.json"
+          body: |
+            Automated regeneration from https://github.com/discord/discord-api-spec (`specs/openapi.json`).
+
+            Discord's REST API surface changed since the last run — review the
+            diff before merging. No Kotlin code changes are needed; the tool
+            list updates automatically from this file on the next build.
+          branch: automated/update-discord-endpoints
+          add-paths: src/main/resources/discord_endpoints.json

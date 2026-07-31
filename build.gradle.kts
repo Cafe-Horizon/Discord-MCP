@@ -1,0 +1,59 @@
+plugins {
+    kotlin("jvm") version "2.4.10"
+    kotlin("plugin.serialization") version "2.4.10"
+    id("com.gradleup.shadow") version "9.6.1"
+    application
+}
+
+group = "com.discordmcp"
+version = "1.0.0"
+
+repositories {
+    mavenCentral()
+}
+
+val ktorVersion = "3.5.1"
+
+dependencies {
+    implementation("io.modelcontextprotocol:kotlin-sdk:0.15.0")
+
+    implementation(platform("io.ktor:ktor-bom:$ktorVersion"))
+    implementation("io.ktor:ktor-client-core")
+    implementation("io.ktor:ktor-client-cio")
+    implementation("io.ktor:ktor-client-content-negotiation")
+    implementation("io.ktor:ktor-serialization-kotlinx-json")
+    implementation("io.ktor:ktor-client-websockets")
+
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+
+    implementation("org.slf4j:slf4j-simple:2.0.18")
+
+    testImplementation(kotlin("test"))
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+application {
+    mainClass.set("com.discordmcp.MainKt")
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("discord-mcp-server")
+    archiveClassifier.set("")
+    archiveVersion.set(project.version.toString())
+    mergeServiceFiles()
+    manifest {
+        attributes["Main-Class"] = "com.discordmcp.MainKt"
+    }
+}
+
+tasks.build {
+    dependsOn(tasks.shadowJar)
+}
