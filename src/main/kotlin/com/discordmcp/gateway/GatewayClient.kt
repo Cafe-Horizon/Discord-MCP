@@ -231,8 +231,8 @@ class GatewayClient {
                 put("intents", intentsValue)
                 putJsonObject("properties") {
                     put("os", System.getProperty("os.name") ?: "linux")
-                    put("browser", "discord-mcp-server")
-                    put("device", "discord-mcp-server")
+                    put("browser", "discord-mcp")
+                    put("device", "discord-mcp")
                 }
                 presenceValue?.let { put("presence", it) }
             }

@@ -24,6 +24,12 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json")
     implementation("io.ktor:ktor-client-websockets")
 
+    // HTTP / SSE server transports for the MCP server itself.
+    implementation("io.ktor:ktor-server-cio")
+    implementation("io.ktor:ktor-server-content-negotiation")
+    implementation("io.ktor:ktor-server-sse")
+    implementation("io.ktor:ktor-server-cors")
+
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
 
@@ -45,7 +51,7 @@ tasks.test {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("discord-mcp-server")
+    archiveBaseName.set("discord-mcp")
     archiveClassifier.set("")
     archiveVersion.set(project.version.toString())
     mergeServiceFiles()

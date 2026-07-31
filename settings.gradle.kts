@@ -1,4 +1,4 @@
-rootProject.name = "discord-mcp-server"
+rootProject.name = "discord-mcp"
 
 pluginManagement {
     repositories {

@@ -1,6 +1,6 @@
-# discord-mcp-server
+# discord-mcp
 
-Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Protocol) サーバーです。Kotlin + [MCP Kotlin SDK](https://github.com/modelcontextprotocol/kotlin-sdk) 製で、STDIO トランスポートで動作します(Claude Desktop などから子プロセスとして起動する想定)。
+Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Protocol) サーバーです。Kotlin + [MCP Kotlin SDK](https://github.com/modelcontextprotocol/kotlin-sdk) 製で、STDIO トランスポート(Claude Desktop などから子プロセスとして起動する想定)に加え、HTTP サーバーとして常駐起動するモード(Streamable HTTP / 後方互換の SSE)にも対応しています。トランスポートは環境変数 `MCP_TRANSPORT` で切り替えます(下記参照)。
 
 ## 特徴
 
@@ -32,6 +32,9 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | 任意 | OAuth2 系ツールで参考情報として利用(未使用でも動作に支障なし)。 |
 | `DISCORD_API_BASE_URL` | 任意 | 既定値 `https://discord.com/api/v10`。 |
 | `DISCORD_GATEWAY_URL` | 任意 | 既定値 `wss://gateway.discord.gg/?v=10&encoding=json`。 |
+| `MCP_TRANSPORT` | 任意 | `stdio`(既定)または `http`。`http` を指定すると埋め込み Ktor サーバーが起動し、Streamable HTTP を `/mcp`、後方互換の SSE トランスポートを `/sse` で待ち受けます。 |
+| `MCP_HTTP_HOST` | 任意 | `MCP_TRANSPORT=http` 時のバインドホスト。既定値 `0.0.0.0`。 |
+| `MCP_HTTP_PORT` | 任意 | `MCP_TRANSPORT=http` 時のバインドポート。既定値 `8080`。 |
 
 ### ビルド
 
@@ -39,7 +42,7 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
 .\gradlew.bat build
 ```
 
-`build/libs/discord-mcp-server-1.0.0.jar`(Shadow プラグインによる fat jar)が生成されます。
+`build/libs/discord-mcp-1.0.0.jar`(Shadow プラグインによる fat jar)が生成されます。
 
 ### Claude Desktop への登録例
 
@@ -50,7 +53,7 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
   "mcpServers": {
     "discord": {
       "command": "java",
-      "args": ["-jar", "D:\\Dev\\Discord-MCP\\build\\libs\\discord-mcp-server-1.0.0.jar"],
+      "args": ["-jar", "D:\\Dev\\Discord-MCP\\build\\libs\\discord-mcp-1.0.0.jar"],
       "env": {
         "DISCORD_BOT_TOKEN": "あなたのBotトークン"
       }
@@ -58,6 +61,36 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
   }
 }
 ```
+
+### HTTP サーバーとして起動する
+
+常駐サーバーとして動かしたい場合(リモート接続や複数クライアントからの接続を想定する場合など)は `MCP_TRANSPORT=http` を指定してください。
+
+```powershell
+$env:DISCORD_BOT_TOKEN = "あなたのBotトークン"
+$env:MCP_TRANSPORT = "http"
+$env:MCP_HTTP_PORT = "8080"
+java -jar build\libs\discord-mcp-1.0.0.jar
+```
+
+起動すると同一ポート上に 2 つのエンドポイントが立ちます。
+
+- `http://<host>:<port>/mcp` — Streamable HTTP トランスポート(新規クライアント向けの推奨経路)
+- `http://<host>:<port>/sse` — 後方互換用の SSE トランスポート
+
+MCP Inspector から動作確認する場合:
+
+```bash
+npx -y @modelcontextprotocol/inspector --connect http://localhost:8080/mcp
+```
+
+Claude Code から HTTP 経由で登録する場合:
+
+```bash
+claude mcp add --transport http discord http://localhost:8080/mcp
+```
+
+なお CORS はデフォルトで `anyHost()`(全許可)になっています。インターネットに公開する場合は `Main.kt` の `install(CORS) { ... }` を許可オリジン限定に変更してください。
 
 ## ツールの構成
 
@@ -70,7 +103,7 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
 
 ```
 src/main/kotlin/com/discordmcp/
-  Main.kt                      # エントリポイント(STDIO トランスポート起動)
+  Main.kt                      # エントリポイント(STDIO / HTTP+SSE トランスポート起動)
   config/Config.kt             # 環境変数読み込み
   discord/EndpointModels.kt    # エンドポイント定義のデータクラス
   discord/EndpointRegistry.kt  # discord_endpoints.json のロード
