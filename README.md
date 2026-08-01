@@ -44,7 +44,7 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
 .\gradlew.bat build
 ```
 
-`build/libs/discord-mcp-1.0.0.jar`(Shadow プラグインによる fat jar)が生成されます。
+`build/libs/discord-mcp-1.0.1.jar`(Shadow プラグインによる fat jar)が生成されます。
 
 ### Claude Desktop への登録例
 
@@ -55,7 +55,7 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
   "mcpServers": {
     "discord": {
       "command": "java",
-      "args": ["-jar", "D:\\Dev\\Discord-MCP\\build\\libs\\discord-mcp-1.0.0.jar"],
+      "args": ["-jar", "D:\\Dev\\Discord-MCP\\build\\libs\\discord-mcp-1.0.1.jar"],
       "env": {
         "DISCORD_BOT_TOKEN": "あなたのBotトークン"
       }
@@ -72,7 +72,7 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
 $env:DISCORD_BOT_TOKEN = "あなたのBotトークン"
 $env:MCP_TRANSPORT = "http"
 $env:MCP_HTTP_PORT = "8080"
-java -jar build\libs\discord-mcp-1.0.0.jar
+java -jar build\libs\discord-mcp-1.0.1.jar
 ```
 
 起動すると同一ポート上に 2 つのエンドポイントが立ちます。

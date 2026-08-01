@@ -94,7 +94,7 @@ class DiscordHttpClient {
                 method = HttpMethod.parse(spec.method)
                 if (authHeader != null) header(HttpHeaders.Authorization, authHeader)
                 if (!auditLogReason.isNullOrBlank()) header("X-Audit-Log-Reason", auditLogReason)
-                header(HttpHeaders.UserAgent, "DiscordBot (discord-mcp, 1.0.0)")
+                header(HttpHeaders.UserAgent, "DiscordBot (discord-mcp, 1.0.1)")
 
                 when (spec.body?.contentType) {
                     "application/json" -> {
