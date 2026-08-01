@@ -35,6 +35,8 @@ Discord の HTTP API をほぼ全面的にカバーする MCP (Model Context Pro
 | `MCP_TRANSPORT` | 任意 | `stdio`(既定)または `http`。`http` を指定すると埋め込み Ktor サーバーが起動し、Streamable HTTP を `/mcp`、後方互換の SSE トランスポートを `/sse` で待ち受けます。 |
 | `MCP_HTTP_HOST` | 任意 | `MCP_TRANSPORT=http` 時のバインドホスト。既定値 `0.0.0.0`。 |
 | `MCP_HTTP_PORT` | 任意 | `MCP_TRANSPORT=http` 時のバインドポート。既定値 `8080`。 |
+| `MCP_ALLOWED_HOSTS` | 任意 | DNS リバインディング対策で許可する `Host` ヘッダ値(カンマ区切り、ポート込み。例 `discord-mcp:8085`)。未設定時は SDK 既定の `localhost` / `127.0.0.1` / `[::1]` のみが許可されます。Docker Compose のサービス名など別ホスト名でアクセスする場合はここに追加してください(詳細は下記「Docker で動かす場合」)。 |
+| `MCP_ALLOWED_ORIGINS` | 任意 | DNS リバインディング対策で許可する `Origin` ヘッダのホスト名(カンマ区切り、ポート・スキームは無視)。ブラウザ系クライアント以外(CLI・コンテナ間通信)では通常不要。 |
 
 ### ビルド
 
@@ -91,6 +93,36 @@ claude mcp add --transport http discord http://localhost:8080/mcp
 ```
 
 なお CORS はデフォルトで `anyHost()`(全許可)になっています。インターネットに公開する場合は `Main.kt` の `install(CORS) { ... }` を許可オリジン限定に変更してください。
+
+### Docker で動かす場合
+
+MCP Kotlin SDK は DNS リバインディング対策として `Host` ヘッダの検証をデフォルトで有効にしており、既定では `localhost` / `127.0.0.1` / `[::1]` しか許可しません。そのため、Docker Compose のサービス名(例: `discord-mcp`)経由でアクセスすると `Host` ヘッダが `discord-mcp:8085` のようになり、403 で弾かれます。
+
+```yaml
+services:
+  discord-mcp:
+    image: discord-mcp
+    environment:
+      DISCORD_BOT_TOKEN: "あなたのBotトークン"
+      MCP_TRANSPORT: "http"
+      MCP_HTTP_PORT: "8085"
+      MCP_ALLOWED_HOSTS: "discord-mcp:8085,localhost:8085"
+    ports:
+      - "8085:8085"
+```
+
+`MCP_ALLOWED_HOSTS` にコンテナのサービス名(+ ポート)を追加すれば、サーバー側で正規に許可されるため、クライアント側の設定で以下のような `Host` ヘッダ上書きは不要になります。
+
+```json
+{
+  "mcpServers": {
+    "discord-mcp": {
+      "type": "http",
+      "url": "http://discord-mcp:8085/mcp"
+    }
+  }
+}
+```
 
 ## ツールの構成
 

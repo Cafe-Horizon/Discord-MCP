@@ -132,15 +132,25 @@ private fun runHttp(serverFactory: () -> Server) {
             exposeHeader("Mcp-Protocol-Version")
         }
 
+        // The SDK's DNS-rebinding protection is on by default and only trusts the `Host` header
+        // values localhost/127.0.0.1/[::1]. Behind a reverse proxy or a Docker Compose service
+        // name (e.g. "discord-mcp:8085"), that hostname must be added via MCP_ALLOWED_HOSTS —
+        // otherwise every request is rejected with 403, and clients would need to spoof a
+        // "Host: localhost" header just to get through. See Config.kt for details.
+        val allowedHosts = Config.httpAllowedHosts
+        val allowedOrigins = Config.httpAllowedOrigins
+
         // Streamable HTTP — recommended transport for new clients. This also installs the Ktor
         // SSE plugin internally, so we must NOT install(SSE) again below or Ktor throws
         // DuplicatePluginException at startup.
-        mcpStreamableHttp(path = "/mcp") { serverFactory() }
+        mcpStreamableHttp(path = "/mcp", allowedHosts = allowedHosts, allowedOrigins = allowedOrigins) {
+            serverFactory()
+        }
 
         // Legacy SSE transport — kept for older MCP clients that don't yet speak Streamable HTTP.
         routing {
             route("/sse") {
-                mcp { serverFactory() }
+                mcp(allowedHosts = allowedHosts, allowedOrigins = allowedOrigins) { serverFactory() }
             }
         }
 
@@ -148,5 +158,8 @@ private fun runHttp(serverFactory: () -> Server) {
             "[discord-mcp] MCP server ready on http://$host:$port " +
                 "(Streamable HTTP: /mcp, SSE: /sse).",
         )
+        if (allowedHosts != null) {
+            System.err.println("[discord-mcp] DNS-rebinding protection: allowed Host header values = $allowedHosts")
+        }
     }.start(wait = true)
 }

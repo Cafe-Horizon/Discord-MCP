@@ -25,6 +25,16 @@ enum class TransportMode {
  *                            exposing Streamable HTTP at /mcp and legacy SSE at /sse.
  *  - MCP_HTTP_HOST         : bind host for the HTTP transport (default "0.0.0.0").
  *  - MCP_HTTP_PORT         : bind port for the HTTP transport (default 8080).
+ *  - MCP_ALLOWED_HOSTS     : comma-separated hostnames (with port, e.g. "discord-mcp:8085") accepted in the
+ *                            incoming `Host` header. The MCP Kotlin SDK enables DNS-rebinding protection by
+ *                            default and only trusts localhost/127.0.0.1/[::1], so a reverse-proxied or
+ *                            containerized deployment reached via a different hostname (e.g. a Docker Compose
+ *                            service name) needs its hostname listed here — otherwise every request gets a
+ *                            403, and clients would otherwise have to spoof a "Host: localhost" header just
+ *                            to get past this check. Leave unset to keep the secure localhost-only default.
+ *  - MCP_ALLOWED_ORIGINS   : comma-separated hostnames accepted in the `Origin` header (scheme/port ignored).
+ *                            Only relevant for browser-based clients; irrelevant for Docker-to-Docker or CLI
+ *                            clients, which don't send an Origin header. Leave unset unless you need it.
  */
 object Config {
     val botToken: String? = System.getenv("DISCORD_BOT_TOKEN")?.takeIf { it.isNotBlank() }
@@ -41,4 +51,10 @@ object Config {
     }
     val httpHost: String = System.getenv("MCP_HTTP_HOST")?.takeIf { it.isNotBlank() } ?: "0.0.0.0"
     val httpPort: Int = System.getenv("MCP_HTTP_PORT")?.toIntOrNull() ?: 8080
+
+    val httpAllowedHosts: List<String>? = System.getenv("MCP_ALLOWED_HOSTS")?.toHostList()
+    val httpAllowedOrigins: List<String>? = System.getenv("MCP_ALLOWED_ORIGINS")?.toHostList()
+
+    private fun String.toHostList(): List<String>? =
+        split(",").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() }
 }
