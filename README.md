@@ -1,4 +1,4 @@
-# discord-mcp
+# Discord-MCP
 
 Discord REST API (244エンドポイント) および Gateway (WebSocket) に対応した Kotlin 製 MCP (Model Context Protocol) サーバー。
 
@@ -20,12 +20,12 @@ Discord REST API (244エンドポイント) および Gateway (WebSocket) に対
 
 ### 2. 実行 (STDIO モード)
 ```bash
-DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/discord-mcp-1.0.2.jar
+DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.0.5.jar
 ```
 
 ### 3. 実行 (HTTP モード)
 ```bash
-DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/discord-mcp-1.0.2.jar
+DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.5.jar
 ```
 
 ---

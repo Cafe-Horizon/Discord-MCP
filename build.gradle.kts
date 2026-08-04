@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.discordmcp"
-version = "1.0.4"
+version = "1.0.5"
 
 repositories {
     mavenCentral()
@@ -55,7 +55,7 @@ tasks.jar {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("discord-mcp")
+    archiveBaseName.set("Discord-MCP")
     archiveClassifier.set("")
     archiveVersion.set(project.version.toString())
     mergeServiceFiles()

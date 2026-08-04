@@ -20,7 +20,7 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 WORKDIR /app
 
-COPY --from=builder /build/build/libs/discord-mcp-*.jar /app/app.jar
+COPY --from=builder /build/build/libs/*.jar /app/app.jar
 
 USER horiz
 EXPOSE 8080
