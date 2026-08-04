@@ -20,12 +20,12 @@ Discord REST API (244エンドポイント) および Gateway (WebSocket) に対
 
 ### 2. 実行 (STDIO モード)
 ```bash
-DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.0.9.jar
+DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.0.10.jar
 ```
 
 ### 3. 実行 (HTTP モード)
 ```bash
-DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.9.jar
+DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.10.jar
 ```
 
 ---

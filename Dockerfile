@@ -1,5 +1,5 @@
 # Stage 1: Builder stage
-FROM gradle:jdk26 AS builder
+FROM gradle:jdk26-alpine AS builder
 
 WORKDIR /build
 
