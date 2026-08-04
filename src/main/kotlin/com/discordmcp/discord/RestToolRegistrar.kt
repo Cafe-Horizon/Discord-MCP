@@ -1,5 +1,7 @@
 package com.discordmcp.discord
 
+import com.discordmcp.config.AppConfig
+import com.discordmcp.config.Config
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -7,12 +9,9 @@ import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -20,13 +19,10 @@ import kotlinx.serialization.json.putJsonObject
 
 /**
  * Registers one MCP tool per [EndpointSpec], covering the entire Discord REST API surface.
- * Every generated tool shares two extra optional inputs: `auditLogReason` (sent as the
- * `X-Audit-Log-Reason` header) and `authOverride` (replaces the default `Bot <token>`
- * Authorization header, e.g. to use a user Bearer token for OAuth2-scoped endpoints).
  */
 object RestToolRegistrar {
 
-    fun registerAll(server: Server, client: DiscordHttpClient) {
+    fun registerAll(server: Server, client: DiscordHttpClient, config: AppConfig = Config.current) {
         for (spec in EndpointRegistry.endpoints) {
             server.addTool(
                 name = spec.toolName,
@@ -81,7 +77,7 @@ object RestToolRegistrar {
                 val auditLogReason = args["auditLogReason"]?.jsonPrimitive?.contentOrNull
                 val authOverride = args["authOverride"]?.jsonPrimitive?.contentOrNull
 
-                if (spec.authType == "bot" && authOverride == null && com.discordmcp.config.Config.botToken == null) {
+                if (spec.authType == "bot" && authOverride == null && config.botToken == null) {
                     return@addTool CallToolResult(
                         content = listOf(
                             TextContent(
@@ -96,12 +92,24 @@ object RestToolRegistrar {
 
                 val result = client.execute(spec, pathValues, queryValues, bodyObject, files, auditLogReason, authOverride)
 
-                val prefix = "HTTP ${result.status} ${result.statusText}" +
-                    if (result.rateLimitedRetries > 0) " (after ${result.rateLimitedRetries} rate-limit retry/retries)" else ""
-                CallToolResult(
-                    content = listOf(TextContent("$prefix\n\n${result.body}")),
-                    isError = result.status == 0 || result.status >= 400,
-                )
+                when (result) {
+                    is DiscordResult.Success -> {
+                        val prefix = "HTTP ${result.status} ${result.statusText}" +
+                            if (result.rateLimitedRetries > 0) " (after ${result.rateLimitedRetries} rate-limit retry/retries)" else ""
+                        CallToolResult(
+                            content = listOf(TextContent("$prefix\n\n${result.body}")),
+                            isError = false,
+                        )
+                    }
+
+                    is DiscordResult.Error -> {
+                        val prefix = "HTTP ${result.status} ${result.statusText}"
+                        CallToolResult(
+                            content = listOf(TextContent("$prefix\n\n${result.message}")),
+                            isError = true,
+                        )
+                    }
+                }
             }
         }
     }

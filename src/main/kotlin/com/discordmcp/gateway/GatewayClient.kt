@@ -1,5 +1,6 @@
 package com.discordmcp.gateway
 
+import com.discordmcp.config.AppConfig
 import com.discordmcp.config.Config
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -14,57 +15,72 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import java.time.Instant
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
 
 /**
  * Manages a single Discord Gateway (websocket) session: HELLO/heartbeat, IDENTIFY/RESUME,
- * dispatch event buffering, and automatic reconnect. Voice (UDP/RTP audio) is out of scope —
- * only the main Gateway (guild/channel/message/presence/... events, and raw op sends such as
- * Voice State Update) is implemented.
+ * dispatch event buffering, and automatic reconnect.
  */
-class GatewayClient {
+class GatewayClient(
+    private val config: AppConfig = Config.current,
+) {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val httpClient = HttpClient(CIO) { install(WebSockets) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    @Volatile var state: GatewayState = GatewayState.DISCONNECTED
-        private set
-    @Volatile private var session: DefaultClientWebSocketSession? = null
-    @Volatile private var heartbeatJob: Job? = null
-    @Volatile private var receiveJob: Job? = null
-    @Volatile private var sequence: Int? = null
-    @Volatile private var sessionId: String? = null
-    @Volatile private var resumeGatewayUrl: String? = null
+    private val _stateFlow = MutableStateFlow<GatewayState>(GatewayState.Disconnected)
+    val stateFlow: StateFlow<GatewayState> = _stateFlow.asStateFlow()
+
+    val state: GatewayState get() = _stateFlow.value
+
+    private val sessionRef = AtomicReference<DefaultClientWebSocketSession?>(null)
+    private var heartbeatJob: Job? = null
+    private var receiveJob: Job? = null
+
+    private val sequenceRef = AtomicInteger(-1)
+    val sequence: Int? get() = sequenceRef.get().takeIf { it >= 0 }
+
+    private val sessionIdRef = AtomicReference<String?>(null)
+    val sessionId: String? get() = sessionIdRef.get()
+
+    private val resumeGatewayUrlRef = AtomicReference<String?>(null)
     @Volatile private var manualDisconnect: Boolean = false
-    @Volatile var lastError: String? = null
-        private set
+
+    private val lastErrorRef = AtomicReference<String?>(null)
+    val lastError: String? get() = lastErrorRef.get()
+
     @Volatile private var readyPayload: JsonObject? = null
 
-    private val bufferLock = Any()
-    private val eventBuffer = ArrayDeque<BufferedEvent>()
+    private val eventBuffer = ConcurrentLinkedQueue<BufferedEvent>()
     private val maxBufferSize = 2000
 
-    private var intentsValue: Long = 0
-    private var presenceValue: JsonObject? = null
+    private val intentsRef = AtomicLong(0L)
+    @Volatile private var presenceValue: JsonObject? = null
 
-    fun bufferedEventCount(): Int = synchronized(bufferLock) { eventBuffer.size }
+    fun bufferedEventCount(): Int = eventBuffer.size
 
-    fun events(limit: Int, typeFilter: String?, sinceSeq: Int?): List<BufferedEvent> = synchronized(bufferLock) {
-        eventBuffer.asSequence()
+    fun events(limit: Int, typeFilter: String?, sinceSeq: Int?): List<BufferedEvent> {
+        return eventBuffer.asSequence()
             .filter { typeFilter == null || it.type.equals(typeFilter, ignoreCase = true) }
             .filter { sinceSeq == null || (it.seq ?: 0) > sinceSeq }
             .toList()
@@ -77,17 +93,17 @@ class GatewayClient {
         put("sequence", sequence)
         put("bufferedEventCount", bufferedEventCount())
         put("lastError", lastError)
-        put("intents", intentsValue)
+        put("intents", intentsRef.get())
     }
 
     suspend fun connect(intents: Long, presence: JsonObject?) {
-        if (state != GatewayState.DISCONNECTED) return
-        if (Config.botToken == null) {
-            lastError = "DISCORD_BOT_TOKEN is not configured; cannot open a Gateway session."
+        if (state !is GatewayState.Disconnected) return
+        if (config.botToken == null) {
+            lastErrorRef.set("DISCORD_BOT_TOKEN is not configured; cannot open a Gateway session.")
             return
         }
         manualDisconnect = false
-        intentsValue = intents
+        intentsRef.set(intents)
         presenceValue = presence
         doConnect(resume = false)
     }
@@ -96,35 +112,34 @@ class GatewayClient {
         manualDisconnect = true
         heartbeatJob?.cancel()
         receiveJob?.cancel()
-        runCatching { session?.close() }
-        session = null
-        state = GatewayState.DISCONNECTED
+        runCatching { sessionRef.getAndSet(null)?.close() }
+        _stateFlow.value = GatewayState.Disconnected
     }
 
     /** Send a raw Gateway payload, e.g. op 3 (Presence Update) or op 4 (Voice State Update). */
     suspend fun sendRaw(op: Int, data: JsonObject): Boolean {
-        val s = session ?: return false
+        val s = sessionRef.get() ?: return false
         val payload = buildJsonObject {
             put("op", op)
             put("d", data)
         }
         runCatching { s.send(Frame.Text(json.encodeToString(JsonObject.serializer(), payload))) }
-            .onFailure { lastError = it.message; return false }
+            .onFailure { lastErrorRef.set(it.message); return false }
         return true
     }
 
     private suspend fun doConnect(resume: Boolean) {
-        state = GatewayState.CONNECTING
-        val url = (if (resume) resumeGatewayUrl else null) ?: Config.gatewayUrl
+        _stateFlow.value = GatewayState.Connecting
+        val url = (if (resume) resumeGatewayUrlRef.get() else null) ?: config.gatewayUrl
         val fullUrl = if (url.contains("?")) url else "$url?v=10&encoding=json"
         val ws = try {
             httpClient.webSocketSession(urlString = fullUrl)
         } catch (e: Exception) {
-            lastError = "Failed to connect: ${e.message}"
-            state = GatewayState.DISCONNECTED
+            lastErrorRef.set("Failed to connect: ${e.message}")
+            _stateFlow.value = GatewayState.Disconnected
             return
         }
-        session = ws
+        sessionRef.set(ws)
         receiveJob = scope.launch { receiveLoop(ws, resume) }
     }
 
@@ -140,18 +155,17 @@ class GatewayClient {
                 val type = payload["t"]?.jsonPrimitive?.contentOrNull
                 val d = payload["d"]
 
-                if (seq != null) sequence = seq
+                if (seq != null) sequenceRef.set(seq)
 
                 when (op) {
                     10 -> { // Hello
                         val interval = d?.jsonObject?.get("heartbeat_interval")?.jsonPrimitive?.intOrNull ?: 41_250
                         heartbeatJob?.cancel()
                         heartbeatJob = scope.launch { heartbeatLoop(ws, interval.toLong()) }
-                        if (wantResume && sessionId != null) {
-                            state = GatewayState.IDENTIFYING
+                        _stateFlow.value = GatewayState.Identifying
+                        if (wantResume && sessionIdRef.get() != null) {
                             sendResume(ws)
                         } else {
-                            state = GatewayState.IDENTIFYING
                             sendIdentify(ws)
                         }
                     }
@@ -159,9 +173,11 @@ class GatewayClient {
                     0 -> { // Dispatch
                         if (type == "READY" && d != null) {
                             readyPayload = d.jsonObject
-                            sessionId = d.jsonObject["session_id"]?.jsonPrimitive?.contentOrNull
-                            resumeGatewayUrl = d.jsonObject["resume_gateway_url"]?.jsonPrimitive?.contentOrNull
-                            state = GatewayState.CONNECTED
+                            val sid = d.jsonObject["session_id"]?.jsonPrimitive?.contentOrNull
+                            val resumeUrl = d.jsonObject["resume_gateway_url"]?.jsonPrimitive?.contentOrNull
+                            sessionIdRef.set(sid)
+                            resumeGatewayUrlRef.set(resumeUrl)
+                            _stateFlow.value = GatewayState.Connected(sid ?: "", resumeUrl)
                         }
                         if (type != null && d != null) {
                             addEvent(BufferedEvent(seq, type, Instant.now().toEpochMilli(), d))
@@ -174,33 +190,34 @@ class GatewayClient {
 
                     7 -> { // Reconnect
                         wantResume = true
-                        lastError = "Server requested reconnect."
+                        lastErrorRef.set("Server requested reconnect.")
                         break
                     }
 
                     9 -> { // Invalid session
                         val resumable = d?.jsonPrimitive?.booleanOrNull ?: false
                         if (!resumable) {
-                            sessionId = null
-                            sequence = null
+                            sessionIdRef.set(null)
+                            sequenceRef.set(-1)
                         }
                         wantResume = resumable
                         delay(Random.nextLong(1_000, 5_000))
-                        lastError = "Invalid session (resumable=$resumable)."
+                        lastErrorRef.set("Invalid session (resumable=$resumable).")
                         break
                     }
 
-                    11 -> { /* Heartbeat ACK - nothing to do beyond noting liveness */ }
+                    11 -> { /* Heartbeat ACK */ }
                 }
             }
         } catch (e: Exception) {
-            lastError = "Gateway receive loop error: ${e.message}"
+            lastErrorRef.set("Gateway receive loop error: ${e.message}")
         } finally {
             heartbeatJob?.cancel()
             if (manualDisconnect) {
-                state = GatewayState.DISCONNECTED
+                _stateFlow.value = GatewayState.Disconnected
             } else {
-                state = GatewayState.RECONNECTING
+                val err = lastErrorRef.get()
+                _stateFlow.value = GatewayState.Reconnecting(err)
                 delay(1_000)
                 doConnect(resume = wantResume)
             }
@@ -216,9 +233,10 @@ class GatewayClient {
     }
 
     private suspend fun sendHeartbeat(ws: DefaultClientWebSocketSession) {
+        val seq = sequence
         val payload = buildJsonObject {
             put("op", 1)
-            put("d", sequence)
+            put("d", seq)
         }
         runCatching { ws.send(Frame.Text(json.encodeToString(JsonObject.serializer(), payload))) }
     }
@@ -227,8 +245,8 @@ class GatewayClient {
         val payload = buildJsonObject {
             put("op", 2)
             putJsonObject("d") {
-                put("token", Config.botToken)
-                put("intents", intentsValue)
+                put("token", config.botToken)
+                put("intents", intentsRef.get())
                 putJsonObject("properties") {
                     put("os", System.getProperty("os.name") ?: "linux")
                     put("browser", "discord-mcp")
@@ -250,7 +268,7 @@ class GatewayClient {
         val payload = buildJsonObject {
             put("op", 6)
             putJsonObject("d") {
-                put("token", Config.botToken)
+                put("token", config.botToken)
                 put("session_id", sid)
                 put("seq", seq)
             }
@@ -258,9 +276,11 @@ class GatewayClient {
         runCatching { ws.send(Frame.Text(json.encodeToString(JsonObject.serializer(), payload))) }
     }
 
-    private fun addEvent(event: BufferedEvent) = synchronized(bufferLock) {
-        eventBuffer.addLast(event)
-        while (eventBuffer.size > maxBufferSize) eventBuffer.removeFirst()
+    private fun addEvent(event: BufferedEvent) {
+        eventBuffer.add(event)
+        while (eventBuffer.size > maxBufferSize) {
+            eventBuffer.poll()
+        }
     }
 
     fun shutdown() {

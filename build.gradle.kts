@@ -39,7 +39,7 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(26)
 }
 
 application {
@@ -48,6 +48,10 @@ application {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.jar {
+    archiveClassifier.set("plain")
 }
 
 tasks.shadowJar {

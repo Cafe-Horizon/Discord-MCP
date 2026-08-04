@@ -1,10 +1,28 @@
-FROM eclipse-temurin:21-jre-alpine
+# Stage 1: Builder stage
+FROM gradle:jdk26 AS builder
+
+WORKDIR /build
+
+COPY build.gradle.kts .
+COPY settings.gradle.kts .
+COPY src src
+
+RUN gradle shadowJar --no-daemon
+
+# Stage 2: Runtime stage
+FROM ghcr.io/cafe-horizon/horiz-os:latest
+
+# Copy OpenJDK from builder stage
+COPY --from=builder /opt/java/openjdk /opt/java/openjdk
+
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
 WORKDIR /app
 
-# JARファイルをコピー
-COPY build/libs/discord-mcp-*.jar app.jar
+COPY --from=builder /build/build/libs/discord-mcp-*.jar /app/app.jar
 
-# 既定は STDIO トランスポート。HTTP(Streamable HTTP: /mcp, SSE: /sse)で常駐させたい場合は
-# `docker run -e MCP_TRANSPORT=http -p 8080:8080 ...` のように環境変数とポート公開を指定してください。
+USER horiz
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

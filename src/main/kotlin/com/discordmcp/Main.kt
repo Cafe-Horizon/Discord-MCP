@@ -1,5 +1,6 @@
 package com.discordmcp
 
+import com.discordmcp.config.AppConfig
 import com.discordmcp.config.Config
 import com.discordmcp.config.TransportMode
 import com.discordmcp.discord.DiscordHttpClient
@@ -48,15 +49,17 @@ fun main() {
     val realStdOut = System.out
     System.setOut(java.io.PrintStream(java.io.FileOutputStream(java.io.FileDescriptor.err), true))
 
-    if (Config.botToken == null) {
+    val appConfig = Config.current
+
+    if (appConfig.botToken == null) {
         System.err.println(
             "[discord-mcp] WARNING: DISCORD_BOT_TOKEN is not set. REST tools will fail unless " +
                 "an 'authOverride' argument is supplied per call, and the Gateway cannot connect.",
         )
     }
 
-    val restClient = DiscordHttpClient()
-    val gatewayClient = GatewayClient()
+    val restClient = DiscordHttpClient(appConfig)
+    val gatewayClient = GatewayClient(appConfig)
 
     val endpointCount = EndpointRegistry.endpoints.size
     System.err.println("[discord-mcp] Loaded $endpointCount Discord REST API operations.")
@@ -85,14 +88,14 @@ fun main() {
                 ),
             ),
         )
-        RestToolRegistrar.registerAll(server, restClient)
+        RestToolRegistrar.registerAll(server, restClient, appConfig)
         GatewayTools.registerAll(server, gatewayClient)
         return server
     }
 
-    when (Config.transport) {
+    when (appConfig.transport) {
         TransportMode.STDIO -> runStdio(realStdOut, ::buildServer)
-        TransportMode.HTTP -> runHttp(::buildServer)
+        TransportMode.HTTP -> runHttp(appConfig, ::buildServer)
     }
 }
 
@@ -112,9 +115,9 @@ private fun runStdio(realStdOut: java.io.PrintStream, serverFactory: () -> Serve
     }
 }
 
-private fun runHttp(serverFactory: () -> Server) {
-    val host = Config.httpHost
-    val port = Config.httpPort
+private fun runHttp(config: AppConfig, serverFactory: () -> Server) {
+    val host = config.httpHost
+    val port = config.httpPort
 
     embeddedServer(CIO, host = host, port = port) {
         // Permissive CORS so browser-based clients (e.g. MCP Inspector) can connect during
@@ -137,8 +140,8 @@ private fun runHttp(serverFactory: () -> Server) {
         // name (e.g. "discord-mcp:8085"), that hostname must be added via MCP_ALLOWED_HOSTS —
         // otherwise every request is rejected with 403, and clients would need to spoof a
         // "Host: localhost" header just to get through. See Config.kt for details.
-        val allowedHosts = Config.httpAllowedHosts
-        val allowedOrigins = Config.httpAllowedOrigins
+        val allowedHosts = config.httpAllowedHosts
+        val allowedOrigins = config.httpAllowedOrigins
 
         // Streamable HTTP — recommended transport for new clients. This also installs the Ktor
         // SSE plugin internally, so we must NOT install(SSE) again below or Ktor throws
@@ -163,3 +166,4 @@ private fun runHttp(serverFactory: () -> Server) {
         }
     }.start(wait = true)
 }
+
