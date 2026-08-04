@@ -3,6 +3,9 @@ FROM gradle:jdk26 AS builder
 
 WORKDIR /build
 
+# Ensure /lib64 exists across all architectures (amd64/arm64)
+RUN mkdir -p /lib64
+
 COPY build.gradle.kts .
 COPY settings.gradle.kts .
 COPY src src
@@ -14,6 +17,7 @@ FROM ghcr.io/cafe-horizon/horiz-os:latest
 
 # Copy C runtime libraries required by OpenJDK
 COPY --from=builder /lib /lib
+COPY --from=builder /lib64 /lib64
 COPY --from=builder /usr/lib /usr/lib
 
 # Copy OpenJDK from builder stage
