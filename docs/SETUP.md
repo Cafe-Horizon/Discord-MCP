@@ -34,7 +34,7 @@
   "mcpServers": {
     "discord": {
       "command": "java",
-      "args": ["-jar", "/path/to/Discord-MCP-1.0.7.jar"],
+      "args": ["-jar", "/path/to/Discord-MCP-1.0.8.jar"],
       "env": {
         "DISCORD_BOT_TOKEN": "YOUR_BOT_TOKEN"
       }
@@ -48,7 +48,7 @@
 `MCP_TRANSPORT=http` を指定して起動します。
 
 ```bash
-DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.7.jar
+DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.8.jar
 ```
 
 起動後、2つのエンドポイントが有効化されます。
