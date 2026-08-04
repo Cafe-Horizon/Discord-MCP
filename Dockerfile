@@ -12,6 +12,11 @@ RUN gradle shadowJar --no-daemon
 # Stage 2: Runtime stage
 FROM ghcr.io/cafe-horizon/horiz-os:latest
 
+# Copy C runtime libraries required by OpenJDK
+COPY --from=builder /lib /lib
+COPY --from=builder /lib64 /lib64
+COPY --from=builder /usr/lib /usr/lib
+
 # Copy OpenJDK from builder stage
 COPY --from=builder /opt/java/openjdk /opt/java/openjdk
 
