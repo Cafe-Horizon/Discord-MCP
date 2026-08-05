@@ -2,7 +2,7 @@
 
 ## 必要環境
 
-* JDK 21 以上
+* JDK 26 以上
 * (ビルド用) Gradle 9.6 系 (`./gradlew`)
 
 ---
@@ -11,7 +11,7 @@
 
 | 変数 | 必須/任意 | 既定値 | 説明 |
 |---|---|---|---|
-| `DISCORD_BOT_TOKEN` | 実質必須 | - | Bot トークン。全 REST 呼び出しおよび Gateway IDENTIFY で使用。 |
+| `DISCORD_BOT_TOKEN` | 必須 | - | Bot トークン。全 REST 呼び出しおよび Gateway IDENTIFY で使用。 |
 | `DISCORD_CLIENT_ID` | 任意 | - | OAuth2 ツール参照用。 |
 | `DISCORD_CLIENT_SECRET` | 任意 | - | OAuth2 ツール参照用。 |
 | `DISCORD_API_BASE_URL` | 任意 | `https://discord.com/api/v10` | REST API ベース URL。 |
@@ -51,7 +51,7 @@
 DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.12.jar
 ```
 
-起動後、以下のエンドポイントが有効化される（MCP 仕様 2026-07-28 ステートレス Streamable HTTP）。
+起動後、以下のエンドポイントが有効化される（MCP 仕様 2026-07-28 ステートレス Streamable HTTP）
 * `http://localhost:8080/mcp` : Stateless Streamable HTTP トランスポート
 
 #### クライアント接続例
