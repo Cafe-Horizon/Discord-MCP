@@ -6,7 +6,7 @@ Discord REST API (244エンドポイント) および Gateway (WebSocket) に対
 
 * **REST API 全網羅**: OpenAPI 仕様から自動生成した 244 個の REST エンドポイントを MCP ツール化。
 * **Gateway 対応**: WebSocket によるリアルタイムイベント受給・送信に対応。
-* **マルチトランスポート**: STDIO モード（既定）および HTTP モード (Streamable HTTP / SSE) に対応。
+* **マルチトランスポート**: STDIO モード（既定）および HTTP モード (Stateless Streamable HTTP — MCP 仕様 2026-07-28) に対応。
 * **自動リトライ**: HTTP 429 レートリミット時の自動リトライに対応。
 
 ---

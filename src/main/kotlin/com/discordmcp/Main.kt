@@ -13,13 +13,10 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.cors.routing.CORS
-import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.StdioServerTransport
-import io.modelcontextprotocol.kotlin.sdk.server.mcp
-import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
+import io.modelcontextprotocol.kotlin.sdk.server.mcpStatelessStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
 import kotlinx.coroutines.Job
@@ -37,7 +34,7 @@ import kotlinx.io.buffered
  *
  * Supports two transports, selected via MCP_TRANSPORT:
  *  - "stdio" (default): tunnels MCP over stdin/stdout, for client-spawned child processes.
- *  - "http": runs an embedded Ktor server exposing Streamable HTTP at /mcp and legacy SSE at /sse.
+ *  - "http": runs an embedded Ktor server exposing Stateless Streamable HTTP at /mcp (MCP spec 2026-07-28).
  */
 fun main() {
     // Some transitive libraries (e.g. kotlin-logging) print a one-line diagnostic banner
@@ -122,6 +119,7 @@ private fun runHttp(config: AppConfig, serverFactory: () -> Server) {
     embeddedServer(CIO, host = host, port = port) {
         // Permissive CORS so browser-based clients (e.g. MCP Inspector) can connect during
         // development. Restrict allowedHosts to specific origins before exposing this publicly.
+        // Note: Mcp-Session-Id is not part of the 2026-07-28 stateless spec and is omitted.
         install(CORS) {
             anyHost()
             allowMethod(HttpMethod.Options)
@@ -129,9 +127,7 @@ private fun runHttp(config: AppConfig, serverFactory: () -> Server) {
             allowMethod(HttpMethod.Post)
             allowMethod(HttpMethod.Delete)
             allowNonSimpleContentTypes = true
-            allowHeader("Mcp-Session-Id")
             allowHeader("Mcp-Protocol-Version")
-            exposeHeader("Mcp-Session-Id")
             exposeHeader("Mcp-Protocol-Version")
         }
 
@@ -143,23 +139,15 @@ private fun runHttp(config: AppConfig, serverFactory: () -> Server) {
         val allowedHosts = config.httpAllowedHosts
         val allowedOrigins = config.httpAllowedOrigins
 
-        // Streamable HTTP — recommended transport for new clients. This also installs the Ktor
-        // SSE plugin internally, so we must NOT install(SSE) again below or Ktor throws
-        // DuplicatePluginException at startup.
-        mcpStreamableHttp(path = "/mcp", allowedHosts = allowedHosts, allowedOrigins = allowedOrigins) {
+        // Stateless Streamable HTTP — MCP spec 2026-07-28. Every request is fully self-contained;
+        // no session state or Mcp-Session-Id header is used. This allows standard round-robin
+        // load balancers without sticky sessions.
+        mcpStatelessStreamableHttp(path = "/mcp", allowedHosts = allowedHosts, allowedOrigins = allowedOrigins) {
             serverFactory()
         }
 
-        // Legacy SSE transport — kept for older MCP clients that don't yet speak Streamable HTTP.
-        routing {
-            route("/sse") {
-                mcp(allowedHosts = allowedHosts, allowedOrigins = allowedOrigins) { serverFactory() }
-            }
-        }
-
         System.err.println(
-            "[discord-mcp] MCP server ready on http://$host:$port " +
-                "(Streamable HTTP: /mcp, SSE: /sse).",
+            "[discord-mcp] MCP server ready on http://$host:$port/mcp (Stateless Streamable HTTP, MCP spec 2026-07-28).",
         )
         if (allowedHosts != null) {
             System.err.println("[discord-mcp] DNS-rebinding protection: allowed Host header values = $allowedHosts")

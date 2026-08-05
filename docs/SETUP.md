@@ -45,15 +45,14 @@
 
 ### 2. HTTP モード (常駐サーバー)
 
-`MCP_TRANSPORT=http` を指定して起動します。
+`MCP_TRANSPORT=http` を指定して起動する。
 
 ```bash
 DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.11.jar
 ```
 
-起動後、2つのエンドポイントが有効化されます。
-* `http://localhost:8080/mcp` : Streamable HTTP トランスポート
-* `http://localhost:8080/sse` : 後方互換 SSE トランスポート
+起動後、以下のエンドポイントが有効化される（MCP 仕様 2026-07-28 ステートレス Streamable HTTP）。
+* `http://localhost:8080/mcp` : Stateless Streamable HTTP トランスポート
 
 #### クライアント接続例
 

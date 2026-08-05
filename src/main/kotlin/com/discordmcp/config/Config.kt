@@ -5,7 +5,7 @@ enum class TransportMode {
     /** STDIO — for client-spawned child processes (e.g. Claude Desktop). */
     STDIO,
 
-    /** HTTP — exposes Streamable HTTP at `/mcp` and legacy SSE at `/sse` on the same embedded server. */
+    /** HTTP — exposes Stateless Streamable HTTP at `/mcp` (MCP spec 2026-07-28). */
     HTTP,
 }
 
