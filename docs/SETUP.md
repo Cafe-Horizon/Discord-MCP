@@ -34,7 +34,7 @@
   "mcpServers": {
     "discord": {
       "command": "java",
-      "args": ["-jar", "/path/to/Discord-MCP-1.0.11.jar"],
+      "args": ["-jar", "/path/to/Discord-MCP-1.0.12.jar"],
       "env": {
         "DISCORD_BOT_TOKEN": "YOUR_BOT_TOKEN"
       }
@@ -48,7 +48,7 @@
 `MCP_TRANSPORT=http` を指定して起動する。
 
 ```bash
-DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.11.jar
+DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.12.jar
 ```
 
 起動後、以下のエンドポイントが有効化される（MCP 仕様 2026-07-28 ステートレス Streamable HTTP）。
