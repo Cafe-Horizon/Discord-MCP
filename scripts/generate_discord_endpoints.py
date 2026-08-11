@@ -99,7 +99,7 @@ def json_type_of(t: str | None) -> str:
 def enum_from_union(options: list) -> list | None:
     """Discord's spec encodes enums as oneOf/anyOf lists of {"const": ...}."""
     if options and all(isinstance(o, dict) and "const" in o for o in options):
-        return [o["const"] for o in options]
+        return [str(o["const"]) for o in options]
     return None
 
 
@@ -135,6 +135,8 @@ def type_info(schema: dict, schemas: dict, depth: int = 0) -> dict:
         }
 
     enum = resolved.get("enum")
+    if enum is not None:
+        enum = [str(x) for x in enum]
     return {"jsonType": json_type_of(t), "enum": enum, "pattern": resolved.get("pattern")}
 
 
