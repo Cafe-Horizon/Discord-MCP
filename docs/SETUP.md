@@ -47,13 +47,13 @@
 ```bash
 DISCORD_MCP_TOOL_CATEGORIES="guilds,channels" \
 DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" \
-java -jar build/libs/Discord-MCP-1.0.16.jar
+java -jar build/libs/Discord-MCP-1.1.0.jar
 ```
 
 閲覧用途のみなら読み取り専用に絞ることもできます。
 
 ```bash
-DISCORD_MCP_READONLY=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.0.16.jar
+DISCORD_MCP_READONLY=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.1.0.jar
 ```
 
 ### 2. 動的ツール検索モード（最大の削減効果）
@@ -67,7 +67,7 @@ DISCORD_MCP_READONLY=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/lib
   実行する（`pathParams` / `queryParams` / `body` / `files` / `auditLogReason` / `authOverride` を指定）
 
 ```bash
-DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.0.16.jar
+DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.1.0.jar
 ```
 
 起動時に登録されるツール数が約250個から2個へ減り、モデルが操作前に対象操作を検索してから呼び出す形に
@@ -86,7 +86,7 @@ DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/l
   "mcpServers": {
     "discord": {
       "command": "java",
-      "args": ["-jar", "/path/to/Discord-MCP-1.0.16.jar"],
+      "args": ["-jar", "/path/to/Discord-MCP-1.1.0.jar"],
       "env": {
         "DISCORD_BOT_TOKEN": "YOUR_BOT_TOKEN"
       }
@@ -100,7 +100,7 @@ DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/l
 `MCP_TRANSPORT=http` を指定して起動
 
 ```bash
-DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.0.16.jar
+DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.1.0.jar
 ```
 
 起動後、以下のエンドポイントが有効化される（MCP 仕様 2026-07-28 ステートレス Streamable HTTP）

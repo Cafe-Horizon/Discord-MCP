@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.discordmcp"
-version = "1.0.16"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
