@@ -54,4 +54,11 @@ data class EndpointSpec(
 ) {
     /** MCP tool name for this operation. */
     val toolName: String get() = "discord_$operationId"
+
+    /**
+     * Coarse resource category derived from the first path segment (e.g. "/guilds/{id}/..." ->
+     * "guilds", "/channels/{id}/messages" -> "channels"). Used to group and filter tools without
+     * requiring per-endpoint metadata in discord_endpoints.json.
+     */
+    val category: String get() = path.trim('/').substringBefore('/').ifBlank { "misc" }
 }

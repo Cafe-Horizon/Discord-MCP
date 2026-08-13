@@ -4,7 +4,9 @@ import com.discordmcp.config.AppConfig
 import com.discordmcp.config.Config
 import com.discordmcp.config.TransportMode
 import com.discordmcp.discord.DiscordHttpClient
+import com.discordmcp.discord.EndpointFilter
 import com.discordmcp.discord.EndpointRegistry
+import com.discordmcp.discord.LazyToolRegistrar
 import com.discordmcp.discord.RestToolRegistrar
 import com.discordmcp.gateway.GatewayClient
 import com.discordmcp.gateway.GatewayTools
@@ -58,8 +60,13 @@ fun main() {
     val restClient = DiscordHttpClient(appConfig)
     val gatewayClient = GatewayClient(appConfig)
 
-    val endpointCount = EndpointRegistry.endpoints.size
-    System.err.println("[discord-mcp] Loaded $endpointCount Discord REST API operations.")
+    val allEndpoints = EndpointRegistry.endpoints
+    val filteredEndpoints = EndpointFilter.apply(allEndpoints, appConfig)
+    System.err.println(
+        "[discord-mcp] Loaded ${allEndpoints.size} Discord REST API operations; " +
+            "${filteredEndpoints.size} enabled after tool-surface filters" +
+            (if (appConfig.lazyTools) " (lazy mode: exposed via discord_search_tools/discord_call_tool)" else "") + ".",
+    )
 
     Runtime.getRuntime().addShutdownHook(
         Thread {
@@ -85,8 +92,14 @@ fun main() {
                 ),
             ),
         )
-        RestToolRegistrar.registerAll(server, restClient, appConfig)
-        GatewayTools.registerAll(server, gatewayClient)
+        if (appConfig.lazyTools) {
+            LazyToolRegistrar.registerAll(server, restClient, appConfig, filteredEndpoints)
+        } else {
+            RestToolRegistrar.registerAll(server, restClient, appConfig)
+        }
+        if (appConfig.enableGateway) {
+            GatewayTools.registerAll(server, gatewayClient)
+        }
         return server
     }
 

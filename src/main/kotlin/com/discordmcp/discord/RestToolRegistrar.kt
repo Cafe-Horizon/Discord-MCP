@@ -3,8 +3,6 @@ package com.discordmcp.discord
 import com.discordmcp.config.AppConfig
 import com.discordmcp.config.Config
 import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.serialization.json.JsonArray
@@ -18,16 +16,23 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * Registers one MCP tool per [EndpointSpec], covering the entire Discord REST API surface.
+ * Registers one MCP tool per [EndpointSpec], covering the (filtered) Discord REST API surface.
+ *
+ * Which endpoints get registered is controlled by [EndpointFilter] (DISCORD_MCP_TOOL_CATEGORIES /
+ * DISCORD_MCP_INCLUDE_TOOLS / DISCORD_MCP_EXCLUDE_TOOLS / DISCORD_MCP_READONLY). If
+ * `config.lazyTools` is set, this registrar is bypassed entirely in favor of
+ * [LazyToolRegistrar], which exposes the same filtered set through two generic tools instead of
+ * one tool per endpoint — see Main.kt.
  */
 object RestToolRegistrar {
 
     fun registerAll(server: Server, client: DiscordHttpClient, config: AppConfig = Config.current) {
-        for (spec in EndpointRegistry.endpoints) {
+        val endpoints = EndpointFilter.apply(EndpointRegistry.endpoints, config)
+        for (spec in endpoints) {
             server.addTool(
                 name = spec.toolName,
                 description = buildDescription(spec),
-                inputSchema = buildInputSchema(spec),
+                inputSchema = buildInputSchema(spec, config),
                 toolAnnotations = ToolAnnotations(
                     readOnlyHint = spec.method == "GET",
                     destructiveHint = spec.method == "DELETE",
@@ -36,80 +41,19 @@ object RestToolRegistrar {
                 ),
             ) { request ->
                 val args = request.arguments ?: emptyMap()
+                val argsObj = JsonObject(args)
 
-                val pathValues = mutableMapOf<String, String>()
-                for (p in spec.pathParams) {
-                    val v = args[p.name]?.jsonPrimitive?.contentOrNull
-                    if (v == null && p.required) {
-                        return@addTool CallToolResult(
-                            content = listOf(TextContent("Missing required path parameter '${p.name}'.")),
-                            isError = true,
-                        )
-                    }
-                    if (v != null) pathValues[p.name] = v
-                }
-
-                val queryValues = mutableMapOf<String, List<String>>()
-                for (p in spec.queryParams) {
-                    val el = args[p.name] ?: continue
-                    val values = if (p.jsonType == "array") {
-                        (el as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
-                    } else {
-                        listOfNotNull(el.jsonPrimitive.contentOrNull)
-                    }
-                    if (values.isNotEmpty()) queryValues[p.name] = values
-                }
-
-                val bodyObject = (args["body"] as? JsonObject)
-                if (spec.body?.required == true && bodyObject == null) {
-                    return@addTool CallToolResult(
-                        content = listOf(
-                            TextContent(
-                                "Missing required 'body' object. Expected fields for " +
-                                    "${spec.body.schemaName}: ${spec.body.hint?.fields?.joinToString() ?: "(see Discord docs)"}",
-                            ),
-                        ),
-                        isError = true,
-                    )
-                }
-
-                val files = args["files"] as? JsonArray
-                val auditLogReason = args["auditLogReason"]?.jsonPrimitive?.contentOrNull
-                val authOverride = args["authOverride"]?.jsonPrimitive?.contentOrNull
-
-                if (spec.authType == "bot" && authOverride == null && config.botToken == null) {
-                    return@addTool CallToolResult(
-                        content = listOf(
-                            TextContent(
-                                "DISCORD_BOT_TOKEN is not configured on the server, and no 'authOverride' " +
-                                    "argument was supplied. Set the DISCORD_BOT_TOKEN environment variable, or " +
-                                    "pass authOverride (e.g. 'Bot <token>' or 'Bearer <user token>').",
-                            ),
-                        ),
-                        isError = true,
-                    )
-                }
-
-                val result = client.execute(spec, pathValues, queryValues, bodyObject, files, auditLogReason, authOverride)
-
-                when (result) {
-                    is DiscordResult.Success -> {
-                        val prefix = "HTTP ${result.status} ${result.statusText}" +
-                            if (result.rateLimitedRetries > 0) " (after ${result.rateLimitedRetries} rate-limit retry/retries)" else ""
-                        CallToolResult(
-                            content = listOf(TextContent("$prefix\n\n${result.body}")),
-                            isError = false,
-                        )
-                    }
-
-                    is DiscordResult.Error -> {
-                        val prefix = "HTTP ${result.status} ${result.statusText}"
-                        CallToolResult(
-                            content = listOf(TextContent("$prefix\n\n${result.message}")),
-                            isError = true,
-                        )
-                    }
-                }
+                EndpointExecutor.call(
+                    spec = spec,
+                    client = client,
+                    config = config,
+                    pathArgs = argsObj,
+                    queryArgs = argsObj,
+                    bodyObject = args["body"] as? JsonObject,
+                    files = args["files"] as? JsonArray,
+                    auditLogReason = args["auditLogReason"]?.jsonPrimitive?.contentOrNull,
+                    authOverride = args["authOverride"]?.jsonPrimitive?.contentOrNull,
+                )
             }
         }
     }
@@ -132,7 +76,7 @@ object RestToolRegistrar {
         if (body?.contentType == "multipart/form-data") {
             sb.append(
                 " To attach files, pass 'files' as an array of " +
-                    "{filename, contentType, contentBase64}.",
+                    "{filename, contentType, contentBase64 (or filePath)}.",
             )
         }
         sb.append(" Full field-level reference: https://docs.discord.com/developers/docs")
@@ -144,7 +88,7 @@ object RestToolRegistrar {
         else -> "string"
     }
 
-    private fun buildInputSchema(spec: EndpointSpec): ToolSchema {
+    private fun buildInputSchema(spec: EndpointSpec, config: AppConfig): ToolSchema {
         val required = mutableListOf<String>()
         val properties = buildJsonObject {
             for (p in spec.pathParams) {
@@ -179,12 +123,25 @@ object RestToolRegistrar {
             if (spec.body != null) {
                 putJsonObject("body") {
                     put("type", "object")
-                    put(
-                        "description",
-                        "JSON request body" +
-                            (spec.body.schemaName?.let { " matching Discord's $it schema" } ?: "") +
-                            ". Additional properties are allowed and passed through as-is.",
-                    )
+                    val desc = "JSON request body" +
+                        (spec.body.schemaName?.let { " matching Discord's $it schema" } ?: "") +
+                        ". Additional properties are allowed and passed through as-is."
+                    put("description", desc)
+                    val hint = spec.body.hint
+                    if (hint != null && hint.fields.isNotEmpty()) {
+                        putJsonObject("properties") {
+                            for (field in hint.fields) {
+                                putJsonObject(field) {
+                                    put("description", "Known field for ${spec.body.schemaName ?: "request body"}.")
+                                }
+                            }
+                        }
+                        if (hint.required.isNotEmpty()) {
+                            putJsonArray("required") {
+                                hint.required.forEach { add(it) }
+                            }
+                        }
+                    }
                 }
                 if (spec.body.required) required.add("body")
             }
@@ -194,7 +151,7 @@ object RestToolRegistrar {
                     put("description", "Optional file attachments.")
                     putJsonObject("items") {
                         put("type", "object")
-                        put("description", "{filename: string, contentType: string, contentBase64: string}")
+                        put("description", "{filename: string, contentType: string, contentBase64: string (or filePath: string)}")
                     }
                 }
             }
@@ -202,14 +159,16 @@ object RestToolRegistrar {
                 put("type", "string")
                 put("description", "Optional. Sent as the X-Audit-Log-Reason header for moderation/audit-logged actions.")
             }
-            putJsonObject("authOverride") {
-                put("type", "string")
-                put(
-                    "description",
-                    "Optional. Overrides the Authorization header for this call " +
-                        "(default is 'Bot <DISCORD_BOT_TOKEN>'). E.g. 'Bearer <user access token>' " +
-                        "for OAuth2 user-scoped endpoints.",
-                )
+            if (config.allowAuthOverride) {
+                putJsonObject("authOverride") {
+                    put("type", "string")
+                    put(
+                        "description",
+                        "Optional. Overrides the Authorization header for this call " +
+                            "(default is 'Bot <DISCORD_BOT_TOKEN>'). E.g. 'Bearer <user access token>' " +
+                            "for OAuth2 user-scoped endpoints.",
+                    )
+                }
             }
         }
         return ToolSchema(properties = properties, required = required)

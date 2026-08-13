@@ -105,9 +105,33 @@ class DiscordHttpClient(
                                     val obj = element.jsonObject
                                     val filename = obj["filename"]?.jsonPrimitive?.contentOrNull ?: "file$index"
                                     val b64 = obj["contentBase64"]?.jsonPrimitive?.contentOrNull
+                                    val filePath = obj["filePath"]?.jsonPrimitive?.contentOrNull
                                     val mime = obj["contentType"]?.jsonPrimitive?.contentOrNull ?: "application/octet-stream"
-                                    if (b64 != null) {
-                                        val bytes = Base64.getDecoder().decode(b64)
+                                    val bytes = when {
+                                        filePath != null -> try {
+                                            if (!config.allowFilePath) {
+                                                System.err.println("[discord-mcp] SECURITY WARNING: filePath reading is disabled (DISCORD_MCP_ALLOW_FILE_PATH=false). Skipping '$filePath'")
+                                                null
+                                            } else {
+                                                val targetFile = java.io.File(filePath).canonicalFile
+                                                val allowedDir = config.allowedFileDir?.let { java.io.File(it).canonicalFile }
+                                                if (allowedDir != null && !targetFile.path.startsWith(allowedDir.path)) {
+                                                    System.err.println("[discord-mcp] SECURITY WARNING: filePath '$filePath' is outside allowed directory '${allowedDir.path}'. Access denied.")
+                                                    null
+                                                } else if (targetFile.exists() && targetFile.isFile) {
+                                                    targetFile.readBytes()
+                                                } else {
+                                                    null
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            System.err.println("[discord-mcp] Error reading file at $filePath: ${e.message}")
+                                            null
+                                        }
+                                        b64 != null -> Base64.getDecoder().decode(b64)
+                                        else -> null
+                                    }
+                                    if (bytes != null) {
                                         append(
                                             "files[$index]",
                                             bytes,

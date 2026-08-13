@@ -8,6 +8,8 @@ Discord REST API (244エンドポイント) および Gateway (WebSocket) に対
 * **Gateway 対応**: WebSocket によるリアルタイムイベント受給・送信に対応。
 * **マルチトランスポート**: STDIO モード（既定）および HTTP モード (Stateless Streamable HTTP — MCP 仕様 2026-07-28) に対応。
 * **自動リトライ**: HTTP 429 レートリミット時の自動リトライに対応。
+* **高精度なツール定義**: リクエストボディ内のフィールド情報展開およびローカルファイルパス (`filePath`) によるトークン消費を抑えたファイル添付に対応。
+* **柔軟なコンテキスト & セキュリティ制御**: カテゴリ/正規表現フィルタ、動的ツール検索 (`DISCORD_MCP_LAZY_TOOLS`)、および認可トークン上書き制御 (`DISCORD_MCP_ALLOW_AUTH_OVERRIDE`) に対応（[詳細](docs/SETUP.md)）。
 
 ---
 
