@@ -115,7 +115,13 @@ class DiscordHttpClient(
                                             } else {
                                                 val targetFile = java.io.File(filePath).canonicalFile
                                                 val allowedDir = config.allowedFileDir?.let { java.io.File(it).canonicalFile }
-                                                if (allowedDir != null && !targetFile.path.startsWith(allowedDir.path)) {
+                                                // Path.startsWith (java.nio) compares path *segments*, not raw
+                                                // characters, so a sibling directory that merely shares a string
+                                                // prefix (e.g. targetFile in "/data/allowed-evil" against an
+                                                // allowedDir of "/data/allowed") is correctly rejected. The old
+                                                // `targetFile.path.startsWith(allowedDir.path)` string comparison
+                                                // let that sibling-directory case slip through.
+                                                if (allowedDir != null && !targetFile.toPath().startsWith(allowedDir.toPath())) {
                                                     System.err.println("[discord-mcp] SECURITY WARNING: filePath '$filePath' is outside allowed directory '${allowedDir.path}'. Access denied.")
                                                     null
                                                 } else if (targetFile.exists() && targetFile.isFile) {

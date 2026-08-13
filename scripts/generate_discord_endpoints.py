@@ -164,7 +164,39 @@ def collect_params(path_item: dict, op_item: dict, schemas: dict) -> tuple[list,
     return path_params, query_params
 
 
-CONTENT_TYPE_PREFERENCE = ["application/json", "multipart/form-data", "application/x-www-form-urlencoded"]
+# multipart/form-data is preferred over application/json when an operation offers both: it's a
+# strict superset (the JSON body still goes through as the "payload_json" part -- see
+# DiscordHttpClient.execute), and picking application/json here silently drops the ability to send
+# the 'files' argument for endpoints like create_message / execute_webhook / update_webhook_message
+# that support attachments only via multipart.
+CONTENT_TYPE_PREFERENCE = ["multipart/form-data", "application/json", "application/x-www-form-urlencoded"]
+
+
+def extract_ref_name(schema: dict) -> str | None:
+    """
+    Find a named schema for field hints, following a single $ref directly or
+    inside an allOf/anyOf/oneOf. Discord's multipart/form-data request bodies
+    are typically encoded either as
+    `allOf: [{$ref: FooRequest}, {type: object, properties: {files[0]: ...}}]`
+    (e.g. create_message, execute_webhook's sibling shape) or as a union of
+    several possible request shapes via anyOf/oneOf (e.g. create_thread,
+    create_interaction_response) -- a plain "$ref" in schema check misses both,
+    which is what previously caused multipart endpoints to lose their
+    field-hint descriptions once CONTENT_TYPE_PREFERENCE started choosing
+    multipart/form-data over application/json. For anyOf/oneOf unions this
+    just picks the first branch as a representative hint -- it's not
+    exhaustive, but it beats no hint at all.
+    """
+    if not isinstance(schema, dict):
+        return None
+    if "$ref" in schema:
+        return schema["$ref"].rsplit("/", 1)[-1]
+    for key in ("allOf", "anyOf", "oneOf"):
+        for sub in schema.get(key, []):
+            name = extract_ref_name(sub)
+            if name:
+                return name
+    return None
 
 
 def build_body(op_item: dict, schemas: dict) -> dict | None:
@@ -182,8 +214,9 @@ def build_body(op_item: dict, schemas: dict) -> dict | None:
 
     schema_name = None
     hint = None
-    if isinstance(chosen_schema, dict) and "$ref" in chosen_schema:
-        schema_name = chosen_schema["$ref"].rsplit("/", 1)[-1]
+    ref_name = extract_ref_name(chosen_schema)
+    if ref_name:
+        schema_name = ref_name
         target = schemas.get(schema_name, {})
         props = target.get("properties")
         if props is not None:
