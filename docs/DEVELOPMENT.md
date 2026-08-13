@@ -39,10 +39,10 @@ Python 3.10+ 環境でスクリプトを実行し、`discord_endpoints.json` を
 python3 scripts/generate_discord_endpoints.py
 ```
 
-* 公式仕様 [discord/discord-api-spec](https://github.com/discord/discord-api-spec) から `openapi.json` を取得し、エンドポイント定義を抽出します。
+* 公式仕様 [discord/discord-api-spec](https://github.com/discord/discord-api-spec) から `openapi.json` を取得し、エンドポイント定義を抽出します
 * オプション:
-  * `--spec <path>` : ローカルの OpenAPI 仕様ファイルを使用。
-  * `--out <path>` : 出力先ファイルを指定。
+  * `--spec <path>` : ローカルの OpenAPI 仕様ファイルを使用
+  * `--out <path>` : 出力先ファイルを指定
 
 ---
 
