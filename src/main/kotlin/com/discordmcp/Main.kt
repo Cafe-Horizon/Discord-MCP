@@ -112,8 +112,8 @@ fun main() {
 private fun runStdio(realStdOut: java.io.PrintStream, serverFactory: () -> Server) {
     val server = serverFactory()
     val transport = StdioServerTransport(
-        inputStream = System.`in`.asSource().buffered(),
-        outputStream = realStdOut.asSink().buffered(),
+        input = System.`in`.asSource().buffered(),
+        output = realStdOut.asSink().buffered(),
     )
 
     runBlocking {

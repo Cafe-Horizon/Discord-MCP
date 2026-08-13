@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.discordmcp"
-version = "1.0.15"
+version = "1.0.16"
 
 repositories {
     mavenCentral()
@@ -58,7 +58,11 @@ tasks.shadowJar {
     archiveBaseName.set("Discord-MCP")
     archiveClassifier.set("")
     archiveVersion.set(project.version.toString())
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
     mergeServiceFiles()
+    append("META-INF/LICENSE.txt")
+    append("META-INF/NOTICE.txt")
+    append("META-INF/LICENSE")
     manifest {
         attributes["Main-Class"] = "com.discordmcp.MainKt"
     }
