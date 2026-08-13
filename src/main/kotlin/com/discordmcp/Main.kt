@@ -6,10 +6,14 @@ import com.discordmcp.config.TransportMode
 import com.discordmcp.discord.DiscordHttpClient
 import com.discordmcp.discord.EndpointFilter
 import com.discordmcp.discord.EndpointRegistry
+import com.discordmcp.discord.InteractionTools
 import com.discordmcp.discord.LazyToolRegistrar
 import com.discordmcp.discord.RestToolRegistrar
 import com.discordmcp.gateway.GatewayClient
 import com.discordmcp.gateway.GatewayTools
+import com.discordmcp.gateway.VoiceTools
+import com.discordmcp.macro.MacroEngine
+import com.discordmcp.macro.MacroToolRegistrar
 import io.ktor.http.HttpMethod
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
@@ -21,7 +25,10 @@ import io.modelcontextprotocol.kotlin.sdk.server.StdioServerTransport
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStatelessStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.io.asSink
 import kotlinx.io.asSource
@@ -75,23 +82,22 @@ fun main() {
         },
     )
 
-    // Builds a fresh Server instance with all tools registered. The HTTP transports create one
-    // session (and therefore one Server) per client connection, so this must be a factory rather
-    // than a shared singleton; the underlying restClient/gatewayClient are safely shared across
-    // every session since they hold no per-client state (the Gateway itself is a single process-wide
-    // connection regardless of how many MCP clients are attached).
+    val macroEngine = MacroEngine()
+
+    // Builds a fresh Server instance with all tools registered.
     fun buildServer(): Server {
         val server = Server(
             serverInfo = Implementation(
                 name = "discord-mcp",
-                version = "1.0.15",
+                version = "1.2.0",
             ),
             options = ServerOptions(
                 capabilities = ServerCapabilities(
-                    tools = ServerCapabilities.Tools(listChanged = false),
+                    tools = ServerCapabilities.Tools(listChanged = true),
                 ),
             ),
         )
+
         if (appConfig.lazyTools) {
             LazyToolRegistrar.registerAll(server, restClient, appConfig, filteredEndpoints)
         } else {
@@ -99,7 +105,26 @@ fun main() {
         }
         if (appConfig.enableGateway) {
             GatewayTools.registerAll(server, gatewayClient)
+            VoiceTools.registerAll(server, gatewayClient, restClient, appConfig)
+            gatewayClient.addEventListener { event ->
+                System.err.println("[discord-mcp] Gateway event received: ${event.type} (seq ${event.seq})")
+            }
         }
+        InteractionTools.registerAll(server, restClient, appConfig)
+        MacroToolRegistrar.registerAll(
+            server = server,
+            macroEngine = macroEngine,
+            client = restClient,
+            config = appConfig,
+            filteredEndpoints = filteredEndpoints,
+            onToolsChanged = {
+                runCatching {
+                    CoroutineScope(Dispatchers.Default).launch {
+                        server.sendToolListChanged(sessionId = "")
+                    }
+                }
+            },
+        )
         return server
     }
 

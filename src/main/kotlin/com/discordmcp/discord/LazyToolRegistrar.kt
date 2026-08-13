@@ -153,6 +153,18 @@ object LazyToolRegistrar {
                         put("type", "string")
                         put("description", "Optional. Sent as the X-Audit-Log-Reason header for moderation/audit-logged actions.")
                     }
+                    putJsonObject("fields") {
+                        put("type", "string")
+                        put("description", "Optional. Comma-separated list of JSON keys/fields to include in the response, filtering out unnecessary fields to save context tokens.")
+                    }
+                    putJsonObject("summaryMode") {
+                        put("type", "boolean")
+                        put("description", "Optional. If true, returns a short human-readable summary instead of full raw JSON response.")
+                    }
+                    putJsonObject("profile") {
+                        put("type", "string")
+                        put("description", "Optional. Bot profile name defined in DISCORD_BOT_TOKENS to override the bot token for this request.")
+                    }
                     if (config.allowAuthOverride) {
                         putJsonObject("authOverride") {
                             put("type", "string")
@@ -185,6 +197,9 @@ object LazyToolRegistrar {
                 )
             }
 
+            val fieldsArg = (args["fields"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }
+                ?: (args["fields"]?.jsonPrimitive?.contentOrNull)?.split(",")?.map { it.trim() }
+
             EndpointExecutor.call(
                 spec = spec,
                 client = client,
@@ -195,6 +210,9 @@ object LazyToolRegistrar {
                 files = args["files"] as? JsonArray,
                 auditLogReason = args["auditLogReason"]?.jsonPrimitive?.contentOrNull,
                 authOverride = args["authOverride"]?.jsonPrimitive?.contentOrNull,
+                fields = fieldsArg,
+                summaryMode = (args["summaryMode"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull(),
+                profile = args["profile"]?.jsonPrimitive?.contentOrNull,
             )
         }
     }

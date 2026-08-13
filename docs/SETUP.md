@@ -12,6 +12,7 @@
 | 変数 | 必須/任意 | 既定値 | 説明 |
 |---|---|---|---|
 | `DISCORD_BOT_TOKEN` | 必須 | - | Bot トークン。全 REST 呼び出しおよび Gateway IDENTIFY で使用 |
+| `DISCORD_BOT_TOKENS` | 任意 | - | マルチBot用プロファイル辞書（JSON `{"default": "...", "admin": "..."}` または CSV `admin=token1,user=token2`）。各ツールの `profile` パラメータで指定可能 |
 | `DISCORD_CLIENT_ID` | 任意 | - | OAuth2 ツール参照用 |
 | `DISCORD_CLIENT_SECRET` | 任意 | - | OAuth2 ツール参照用 |
 | `DISCORD_API_BASE_URL` | 任意 | `https://discord.com/api/v10` | REST API ベース URL |
@@ -47,13 +48,13 @@
 ```bash
 DISCORD_MCP_TOOL_CATEGORIES="guilds,channels" \
 DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" \
-java -jar build/libs/Discord-MCP-1.1.1.jar
+java -jar build/libs/Discord-MCP-1.2.0.jar
 ```
 
 閲覧用途のみなら読み取り専用に絞ることもできます。
 
 ```bash
-DISCORD_MCP_READONLY=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.1.1.jar
+DISCORD_MCP_READONLY=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.2.0.jar
 ```
 
 ### 2. 動的ツール検索モード（最大の削減効果）
@@ -67,12 +68,34 @@ DISCORD_MCP_READONLY=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/lib
   実行する（`pathParams` / `queryParams` / `body` / `files` / `auditLogReason` / `authOverride` を指定）
 
 ```bash
-DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.1.1.jar
+DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/libs/Discord-MCP-1.2.0.jar
 ```
 
 起動時に登録されるツール数が約250個から2個へ減り、モデルが操作前に対象操作を検索してから呼び出す形に
 なります（このリポジトリの開発環境で使われている ToolSearch の遅延ロードパターンと同じ発想です）。
 `DISCORD_MCP_TOOL_CATEGORIES` 等と併用した場合、検索・呼び出しの対象もそのフィルタ後の集合に限定されます。
+
+### 3. レスポンスフィールド選択制限 (`fields` & `summaryMode`)
+
+API呼び出し時の返却データサイズ・トークン消費量を削減するために、全RESTツールおよび `discord_call_tool` に共通のオプション引数が追加されています。
+
+* `fields`: 返却JSONから指定キーのみを抽出（例: `"id,content,author"` または `["id", "content"]`）
+* `summaryMode`: `true` に設定すると、JSONツリーの代わりに簡略化された要約テキスト（配列要素数や特定識別子）を返却
+
+### 4. 動的AIマクロエンジン (`discord_register_macro` 他)
+
+AI自身が繰り返し使用する複雑な複数手順（アトミックツールの呼び出しおよびデータ抽出・フィルタリング）をマクロとして保存・自動生成できます。
+
+* `discord_register_macro`: マクロ定義（名前、パラメータ、ステップ配列、許可プロファイルリスト `profiles`、`defaultProfile`）を登録
+* `discord_list_macros`: 登録済みマクロを取得（`profile` パラメータで指定プロファイル用のアクセス可能マクロのみ抽出可能）
+* プロファイル制限機能 (`profiles`): 特定のBotプロファイル専用マクロとしてアクセス制限が可能。`defaultProfile` 設定により未指定時の自動補完に対応
+* 登録完了後、`notifications/tools/list_changed` 通知が送信され、即時に `discord_macro_<name>` がMCPツールとして利用可能になります
+* 定義データは `data/macros.json` に自動保存され、サーバー再起動後も保持されます
+
+### 5. Interaction 応答 & Voice チャンネル制御ツール
+
+* **Interaction 応答**: `discord_interaction_reply` を使用し、ボタンクリックやモーダル送信に対するコールバック応答を直接送信可能
+* **Voice 接続 & TTS**: `discord_voice_join` / `discord_voice_leave` でボイスチャンネルへ入退室し、`discord_voice_send_tts_message` で音声アナウンステキストを送信可能
 
 ---
 
@@ -86,7 +109,7 @@ DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/l
   "mcpServers": {
     "discord": {
       "command": "java",
-      "args": ["-jar", "/path/to/Discord-MCP-1.1.1.jar"],
+      "args": ["-jar", "/path/to/Discord-MCP-1.2.0.jar"],
       "env": {
         "DISCORD_BOT_TOKEN": "YOUR_BOT_TOKEN"
       }
@@ -100,7 +123,7 @@ DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/l
 `MCP_TRANSPORT=http` を指定して起動
 
 ```bash
-DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.1.1.jar
+DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Discord-MCP-1.2.0.jar
 ```
 
 起動後、以下のエンドポイントが有効化される（MCP 仕様 2026-07-28 ステートレス Streamable HTTP）
@@ -116,6 +139,40 @@ DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" MCP_TRANSPORT=http java -jar build/libs/Disco
   ```bash
   npx -y @modelcontextprotocol/inspector --connect http://localhost:8080/mcp
   ```
+
+### 3. マルチBot (プロファイル) 設定例
+
+`DISCORD_BOT_TOKENS` を使用して複数の Bot トークンをプロファイルとして登録し、呼び出し時に `profile` パラメータで切り替えることができます。
+
+#### 環境変数の設定形式
+* **JSON 形式**:
+  `DISCORD_BOT_TOKENS='{"default": "TOKEN_DEFAULT", "admin": "TOKEN_ADMIN"}'`
+* **CSV 形式**:
+  `DISCORD_BOT_TOKENS="default=TOKEN_DEFAULT,admin=TOKEN_ADMIN"`
+
+#### `claude_desktop_config.json` での設定例
+```json
+{
+  "mcpServers": {
+    "discord": {
+      "command": "java",
+      "args": ["-jar", "/path/to/Discord-MCP-1.2.0.jar"],
+      "env": {
+        "DISCORD_BOT_TOKENS": "{\"default\": \"TOKEN_DEFAULT\", \"admin\": \"TOKEN_ADMIN\"}"
+      }
+    }
+  }
+}
+```
+
+#### ツール呼び出し時の `profile` 指定例
+MCP ツール呼び出し時（または `discord_call_tool` 使用時）に `profile` パラメータを指定します。
+
+```json
+{
+  "profile": "admin"
+}
+```
 
 ---
 
