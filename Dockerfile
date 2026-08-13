@@ -6,18 +6,27 @@ WORKDIR /build
 # Ensure /lib64 exists across all architectures (amd64/arm64)
 RUN mkdir -p /lib64
 
-COPY build.gradle.kts .
-COPY settings.gradle.kts .
-COPY src src
+COPY build.gradle.kts settings.gradle.kts ./
+COPY src ./src
 
-RUN gradle shadowJar --no-daemon
+# Use pre-built JAR from host context if present; fallback to container build if absent
+RUN --mount=type=bind,target=/host_ctx \
+    JAR_FILE=$(ls /host_ctx/build/libs/*.jar 2>/dev/null | grep -v 'plain' | tail -n 1 || true); \
+    if [ -n "$JAR_FILE" ] && [ -f "$JAR_FILE" ]; then \
+        echo "Found pre-built JAR ($JAR_FILE). Reusing host artifact."; \
+        cp "$JAR_FILE" /build/app.jar; \
+    else \
+        echo "No pre-built JAR found. Building shadowJar in container..."; \
+        gradle shadowJar --no-daemon; \
+        cp $(ls /build/build/libs/*.jar | grep -v 'plain' | tail -n 1) /build/app.jar; \
+    fi
 
 # Detect required Java modules from the fat JAR
 RUN jdeps \
     --ignore-missing-deps \
     --print-module-deps \
     --multi-release 26 \
-    /build/build/libs/*.jar 2>/dev/null \
+    /build/app.jar 2>/dev/null \
     | tr ',' '\n' | sort -u | tr '\n' ',' | sed 's/,$//' \
     > /tmp/jdeps_modules.txt \
     && cat /tmp/jdeps_modules.txt
@@ -56,7 +65,7 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 WORKDIR /app
 
-COPY --from=builder /build/build/libs/*.jar /app/app.jar
+COPY --from=builder /build/app.jar /app/app.jar
 
 USER horiz
 EXPOSE 8080
