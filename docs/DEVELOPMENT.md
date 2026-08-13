@@ -14,9 +14,14 @@ src/main/kotlin/com/discordmcp/
   discord/DiscordResult.kt     # REST呼び出し結果型
   discord/RestToolRegistrar.kt # 244 エンドポイントの MCP ツール登録
   discord/LazyToolRegistrar.kt # 動的ツール検索モード (discord_search_tools / discord_call_tool) の登録
+  discord/InteractionTools.kt  # Interaction (ボタン・モーダル) コールバック応答ツール
+  macro/MacroModels.kt         # マクロ定義・パラメータ・ステップデータモデル
+  macro/MacroEngine.kt         # マクロの永続化、変数評価、シーケンス実行エンジン
+  macro/MacroToolRegistrar.kt   # 動的マクロ管理メタツールおよび discord_macro_* ツールの登録
   gateway/GatewayModels.kt     # Gateway ペイロード/イベントモデル
-  gateway/GatewayClient.kt     # WebSocket 接続・イベントループ管理
+  gateway/GatewayClient.kt     # WebSocket 接続・イベントループ・リスナー管理
   gateway/GatewayTools.kt      # Gateway 操作用 MCP ツール
+  gateway/VoiceTools.kt        # Voice State Update 入退室および TTS メッセージツール
 src/main/resources/
   discord_endpoints.json       # 自動生成されたエンドポイント定義データ
 scripts/

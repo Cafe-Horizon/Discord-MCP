@@ -14,6 +14,7 @@ enum class TransportMode {
  */
 data class AppConfig(
     val botToken: String? = System.getenv("DISCORD_BOT_TOKEN")?.takeIf { it.isNotBlank() },
+    val botTokens: Map<String, String> = parseBotTokens(System.getenv("DISCORD_BOT_TOKENS"), System.getenv("DISCORD_BOT_TOKEN")),
     val clientId: String? = System.getenv("DISCORD_CLIENT_ID")?.takeIf { it.isNotBlank() },
     val clientSecret: String? = System.getenv("DISCORD_CLIENT_SECRET")?.takeIf { it.isNotBlank() },
     val apiBaseUrl: String = System.getenv("DISCORD_API_BASE_URL")?.takeIf { it.isNotBlank() }
@@ -70,6 +71,29 @@ data class AppConfig(
     val allowedFileDir: String? = System.getenv("DISCORD_MCP_ALLOWED_FILE_DIR")?.takeIf { it.isNotBlank() },
 ) {
     companion object {
+        private fun parseBotTokens(jsonOrCsv: String?, singleToken: String?): Map<String, String> {
+            val map = mutableMapOf<String, String>()
+            if (!singleToken.isNullOrBlank()) {
+                map["default"] = singleToken
+            }
+            if (!jsonOrCsv.isNullOrBlank()) {
+                runCatching {
+                    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                    val parsed = json.decodeFromString<Map<String, String>>(jsonOrCsv)
+                    map.putAll(parsed)
+                }.onFailure {
+                    // Fallback to csv: profile1=token1,profile2=token2
+                    jsonOrCsv.split(",").map { it.trim() }.forEach { pair ->
+                        val parts = pair.split("=")
+                        if (parts.size == 2) {
+                            map[parts[0].trim()] = parts[1].trim()
+                        }
+                    }
+                }
+            }
+            return map
+        }
+
         private fun String.toHostList(): List<String>? =
             split(",").map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() }
 

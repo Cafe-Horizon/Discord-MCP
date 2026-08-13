@@ -276,10 +276,23 @@ class GatewayClient(
         runCatching { ws.send(Frame.Text(json.encodeToString(JsonObject.serializer(), payload))) }
     }
 
+    private val eventListeners = java.util.concurrent.CopyOnWriteArrayList<(BufferedEvent) -> Unit>()
+
+    fun addEventListener(listener: (BufferedEvent) -> Unit) {
+        eventListeners.add(listener)
+    }
+
+    fun removeEventListener(listener: (BufferedEvent) -> Unit) {
+        eventListeners.remove(listener)
+    }
+
     private fun addEvent(event: BufferedEvent) {
         eventBuffer.add(event)
         while (eventBuffer.size > maxBufferSize) {
             eventBuffer.poll()
+        }
+        for (listener in eventListeners) {
+            runCatching { listener(event) }
         }
     }
 
