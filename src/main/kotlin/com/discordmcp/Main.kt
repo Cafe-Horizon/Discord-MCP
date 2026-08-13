@@ -84,7 +84,7 @@ fun main() {
         val server = Server(
             serverInfo = Implementation(
                 name = "discord-mcp",
-                version = "1.0.14",
+                version = "1.0.15",
             ),
             options = ServerOptions(
                 capabilities = ServerCapabilities(
