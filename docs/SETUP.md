@@ -9,28 +9,31 @@
 
 ## 環境変数一覧
 
-| 変数 | 必須/任意 | 既定値 | 説明 |
-|---|---|---|---|
-| `DISCORD_BOT_TOKEN` | 必須 | - | Bot トークン。全 REST 呼び出しおよび Gateway IDENTIFY で使用 |
-| `DISCORD_BOT_TOKENS` | 任意 | - | マルチBot用プロファイル辞書（JSON `{"default": "...", "admin": "..."}` または CSV `admin=token1,user=token2`）。各ツールの `profile` パラメータで指定可能 |
-| `DISCORD_CLIENT_ID` | 任意 | - | OAuth2 ツール参照用 |
-| `DISCORD_CLIENT_SECRET` | 任意 | - | OAuth2 ツール参照用 |
-| `DISCORD_API_BASE_URL` | 任意 | `https://discord.com/api/v10` | REST API ベース URL |
-| `DISCORD_GATEWAY_URL` | 任意 | `wss://gateway.discord.gg/?v=10&encoding=json` | Gateway WebSocket URL |
-| `MCP_TRANSPORT` | 任意 | `stdio` | `stdio` または `http` |
-| `MCP_HTTP_HOST` | 任意 | `0.0.0.0` | HTTP バインドホスト |
-| `MCP_HTTP_PORT` | 任意 | `8080` | HTTP バインドポート |
-| `MCP_ALLOWED_HOSTS` | 任意 | - | DNS リバインディング対策の許可 Host ヘッダ（カンマ区切り、ポート込み） |
-| `MCP_ALLOWED_ORIGINS` | 任意 | - | 許可 Origin ヘッダ（カンマ区切り） |
-| `DISCORD_MCP_TOOL_CATEGORIES` | 任意 | - | 登録するツールをカテゴリで絞り込む（カンマ区切り、例: `guilds,channels,messages`）。カテゴリはエンドポイントパスの先頭セグメント（`/guilds/...` → `guilds` 等） |
-| `DISCORD_MCP_INCLUDE_TOOLS` | 任意 | - | ツール名に対する正規表現。マッチしたものだけ登録 |
-| `DISCORD_MCP_EXCLUDE_TOOLS` | 任意 | - | ツール名に対する正規表現。マッチしたものは登録から除外（include/category 適用後に評価） |
-| `DISCORD_MCP_READONLY` | 任意 | `false` | `true` の場合、GET エンドポイントのみ登録（書き込み系ツールを完全に排除） |
-| `DISCORD_MCP_LAZY_TOOLS` | 任意 | `false` | `true` の場合、個別ツールの代わりに `discord_search_tools` / `discord_call_tool` の2ツールのみを登録し、実際のエンドポイントは呼び出し時に動的解決する（コンテキスト使用量を大幅削減） |
-| `DISCORD_MCP_ENABLE_GATEWAY` | 任意 | `true` | `false` の場合、Gateway 系5ツール（`discord_gateway_*`）を登録しない |
-| `DISCORD_MCP_ALLOW_AUTH_OVERRIDE` | 任意 | `false` | `true` の場合、リクエスト単位での Authorization ヘッダの上書き (`authOverride` パラメータ) を許可・スキーマ開示する。無効時はセキュリティ保護のため除外 |
-| `DISCORD_MCP_ALLOW_FILE_PATH` | 任意 | `true` | `false` の場合、`filePath` によるローカルファイルの読み込みを完全に拒否する（リモート運用時の任意ファイル読み込み防止） |
-| `DISCORD_MCP_ALLOWED_FILE_DIR` | 任意 | - | `filePath` で読み込みを許可するベースディレクトリ（例: `/var/mcp/uploads`）。指定時、正規化パスによりディレクトリ外への参照 (Path Traversal) をブロックする |
+| 変数名 | 必須/任意 | 型 | 既定値 | 説明 |
+|---|---|---|---|---|
+| **Bot認証・基本設定** | | | | |
+| `DISCORD_BOT_TOKEN` | 条件付き必須 | `String` | - | 単一Bot用トークン（`DISCORD_BOT_TOKENS` 未指定時は必須） |
+| `DISCORD_BOT_TOKENS` | 任意 | `JSON / CSV` | - | マルチBot用プロファイル辞書（JSON `{"default": "...", "admin": "..."}` または CSV `admin=token1,user=token2`）。各ツールの `profile` パラメータで指定可能 |
+| `DISCORD_CLIENT_ID` | 任意 | `String` | - | OAuth2 ツール参照用 |
+| `DISCORD_CLIENT_SECRET` | 任意 | `String` | - | OAuth2 ツール参照用 |
+| `DISCORD_API_BASE_URL` | 任意 | `String` | `https://discord.com/api/v10` | REST API ベース URL |
+| `DISCORD_GATEWAY_URL` | 任意 | `String` | `wss://gateway.discord.gg/?v=10&encoding=json` | Gateway WebSocket URL |
+| **MCP / ネットワーク設定** | | | | |
+| `MCP_TRANSPORT` | 任意 | `String` | `stdio` | `stdio` または `http` |
+| `MCP_HTTP_HOST` | 任意 | `String` | `0.0.0.0` | HTTP バインドホスト |
+| `MCP_HTTP_PORT` | 任意 | `Int` | `8080` | HTTP バインドポート |
+| `MCP_ALLOWED_HOSTS` | 任意 | `CSV` | - | DNS リバインディング対策の許可 Host ヘッダ（カンマ区切り、ポート込み） |
+| `MCP_ALLOWED_ORIGINS` | 任意 | `CSV` | - | 許可 Origin ヘッダ（カンマ区切り） |
+| **ツール制御・セキュリティ** | | | | |
+| `DISCORD_MCP_TOOL_CATEGORIES` | 任意 | `CSV` | - | 登録するツールをカテゴリで絞り込む（カンマ区切り、例: `guilds,channels,messages`）。カテゴリはエンドポイントパスの先頭セグメント |
+| `DISCORD_MCP_INCLUDE_TOOLS` | 任意 | `Regex` | - | ツール名に対する正規表現。マッチしたものだけ登録 |
+| `DISCORD_MCP_EXCLUDE_TOOLS` | 任意 | `Regex` | - | ツール名に対する正規表現。マッチしたものは登録から除外（include/category 適用後に評価） |
+| `DISCORD_MCP_READONLY` | 任意 | `Boolean` | `false` | `true` の場合、GET エンドポイントのみ登録（書き込み系ツールを完全に排除） |
+| `DISCORD_MCP_LAZY_TOOLS` | 任意 | `Boolean` | `false` | `true` の場合、個別ツールの代わりに `discord_search_tools` / `discord_call_tool` の2ツールのみを登録し、実際のエンドポイントは呼び出し時に動的解決する（コンテキスト使用量を大幅削減） |
+| `DISCORD_MCP_ENABLE_GATEWAY` | 任意 | `Boolean` | `true` | `false` の場合、Gateway 系5ツール（`discord_gateway_*`）を登録しない |
+| `DISCORD_MCP_ALLOW_AUTH_OVERRIDE` | 任意 | `Boolean` | `false` | `true` の場合、リクエスト単位での Authorization ヘッダの上書き (`authOverride` パラメータ) を許可・スキーマ開示する。無効時はセキュリティ保護のため除外 |
+| `DISCORD_MCP_ALLOW_FILE_PATH` | 任意 | `Boolean` | `true` | `false` の場合、`filePath` によるローカルファイルの読み込みを完全に拒否する（リモート運用時の任意ファイル読み込み防止） |
+| `DISCORD_MCP_ALLOWED_FILE_DIR` | 任意 | `String` | - | `filePath` で読み込みを許可するベースディレクトリ（例: `/var/mcp/uploads`）。指定時、正規化パスによりディレクトリ外への参照 (Path Traversal) をブロックする |
 
 ---
 
@@ -72,7 +75,7 @@ DISCORD_MCP_LAZY_TOOLS=true DISCORD_BOT_TOKEN="YOUR_BOT_TOKEN" java -jar build/l
 ```
 
 起動時に登録されるツール数が約250個から2個へ減り、モデルが操作前に対象操作を検索してから呼び出す形に
-なります（このリポジトリの開発環境で使われている ToolSearch の遅延ロードパターンと同じ発想です）。
+なります。
 `DISCORD_MCP_TOOL_CATEGORIES` 等と併用した場合、検索・呼び出しの対象もそのフィルタ後の集合に限定されます。
 
 ### 3. レスポンスフィールド選択制限 (`fields` & `summaryMode`)
