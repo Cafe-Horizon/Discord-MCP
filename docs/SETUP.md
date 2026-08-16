@@ -195,4 +195,11 @@ services:
       MCP_ALLOWED_HOSTS: "discord-mcp:8085,localhost:8085"
     ports:
       - "8085:8085"
+    volumes:
+      - discord-mcp-data:/app/data
+
+volumes:
+  discord-mcp-data:
 ```
+
+> **Note**: `volumes` 設定により、動的マクロ定義 (`data/macros.json`) がコンテナ再作成後も保持されます。
