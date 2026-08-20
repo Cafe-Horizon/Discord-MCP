@@ -210,10 +210,6 @@ class MacroEngine(
             val resolved = resolveVariable(expr, context)
                 ?: throw IllegalArgumentException("Variable '{{$expr}}' not found in context")
             if (resolved is JsonArray) return resolved
-            if (resolved is JsonPrimitive && resolved.isString) {
-                return runCatching { json.parseToJsonElement(resolved.content).jsonArray }
-                    .getOrElse { throw IllegalArgumentException("Variable '{{$expr}}' content is not a valid JSON Array") }
-            }
             throw IllegalArgumentException("Variable '{{$expr}}' resolved to non-array type: ${resolved::class.simpleName}")
         }
 
