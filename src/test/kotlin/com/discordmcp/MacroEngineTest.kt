@@ -350,5 +350,84 @@ class MacroEngineTest {
 
         testFile.delete()
     }
+
+    @Test
+    fun testMacroExecutionOutputFormatting() = runBlocking {
+        val testFile = File("build/test_formatting_macros.json")
+        testFile.delete()
+        val engine = MacroEngine(storageFile = testFile)
+
+        val macro = MacroDefinition(
+            name = "formatting_macro",
+            description = "Test output formatting with newlines",
+            steps = listOf(
+                MacroStep(
+                    stepId = "s1",
+                    tool = "test_tool",
+                    args = emptyMap(),
+                ),
+            ),
+        )
+        engine.registerMacro(macro)
+
+        val mockClient = com.discordmcp.discord.DiscordHttpClient(com.discordmcp.config.AppConfig())
+        val result = engine.executeMacro(
+            macroName = "formatting_macro",
+            arguments = emptyMap(),
+            restClient = mockClient,
+            toolExecutor = { _, _ ->
+                buildJsonObject {
+                    put("id", "987654321")
+                    put("name", "Test Item")
+                }
+            },
+        )
+
+        assertTrue(result.success)
+        val json = Json { prettyPrint = true }
+        val outputString = json.encodeToString(result.output)
+
+        assertTrue(outputString.contains("\n"), "Output should contain newlines")
+        assertTrue(outputString.contains("  \"id\": \"987654321\""), "Output should be formatted with indentation")
+        assertFalse(outputString.contains("HTTP 200"), "Output must not contain HTTP 200 prefix")
+
+        testFile.delete()
+    }
+
+    @Test
+    fun testMacroExecutionErrorPropagation() = runBlocking {
+        val testFile = File("build/test_err_prop_macros.json")
+        testFile.delete()
+        val engine = MacroEngine(storageFile = testFile)
+
+        val macro = MacroDefinition(
+            name = "err_macro",
+            description = "Test error propagation",
+            steps = listOf(
+                MacroStep(
+                    stepId = "s1",
+                    tool = "failing_tool",
+                    args = emptyMap(),
+                ),
+            ),
+        )
+        engine.registerMacro(macro)
+
+        val mockClient = com.discordmcp.discord.DiscordHttpClient(com.discordmcp.config.AppConfig())
+        val result = engine.executeMacro(
+            macroName = "err_macro",
+            arguments = emptyMap(),
+            restClient = mockClient,
+            toolExecutor = { _, _ ->
+                throw RuntimeException("HTTP 403 Forbidden: Missing Permissions")
+            },
+        )
+
+        assertFalse(result.success)
+        assertTrue(result.error?.contains("HTTP 403 Forbidden: Missing Permissions") == true)
+
+        testFile.delete()
+    }
 }
+
 

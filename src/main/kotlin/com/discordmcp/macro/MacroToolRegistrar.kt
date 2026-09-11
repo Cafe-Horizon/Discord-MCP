@@ -166,23 +166,29 @@ object MacroToolRegistrar {
                     restClient = client,
                     toolExecutor = { subToolName, subArgs ->
                         val spec = availableEndpointsMap[subToolName]
-                        if (spec != null) {
-                            val argsObj = JsonObject(subArgs)
-                            val callResult = EndpointExecutor.call(
-                                spec = spec,
-                                client = client,
-                                config = config,
-                                pathArgs = argsObj,
-                                queryArgs = argsObj,
-                                bodyObject = subArgs["body"] as? JsonObject,
-                                files = subArgs["files"] as? JsonArray,
-                                auditLogReason = subArgs["auditLogReason"]?.jsonPrimitive?.contentOrNull,
-                                authOverride = subArgs["authOverride"]?.jsonPrimitive?.contentOrNull,
-                            )
-                            val text = callResult.content.filterIsInstance<TextContent>().firstOrNull()?.text ?: ""
-                            runCatching { json.parseToJsonElement(text) }.getOrElse { json.parseToJsonElement(json.encodeToString(text)) }
+                            ?: throw IllegalArgumentException("Unknown or disabled tool '$subToolName'")
+                        val argsObj = JsonObject(subArgs)
+                        val callResult = EndpointExecutor.call(
+                            spec = spec,
+                            client = client,
+                            config = config,
+                            pathArgs = argsObj,
+                            queryArgs = argsObj,
+                            bodyObject = subArgs["body"] as? JsonObject,
+                            files = subArgs["files"] as? JsonArray,
+                            auditLogReason = subArgs["auditLogReason"]?.jsonPrimitive?.contentOrNull,
+                            authOverride = subArgs["authOverride"]?.jsonPrimitive?.contentOrNull,
+                        )
+                        if (callResult.isError == true) {
+                            val errorMsg = callResult.content.filterIsInstance<TextContent>().firstOrNull()?.text
+                                ?: "Tool '$subToolName' failed with unknown error"
+                            throw RuntimeException(errorMsg)
+                        }
+                        val text = callResult.content.filterIsInstance<TextContent>().firstOrNull()?.text?.trim() ?: ""
+                        if (text.isEmpty()) {
+                            JsonObject(emptyMap())
                         } else {
-                            json.parseToJsonElement("""{"error": "Unknown or disabled tool '$subToolName'"}""")
+                            runCatching { json.parseToJsonElement(text) }.getOrElse { JsonPrimitive(text) }
                         }
                     },
                 )
