@@ -111,12 +111,10 @@ object EndpointExecutor {
 
         return when (result) {
             is DiscordResult.Success -> {
-                val prefix = "HTTP ${result.status} ${result.statusText}" +
-                    if (result.rateLimitedRetries > 0) " (after ${result.rateLimitedRetries} rate-limit retry/retries)" else ""
-                
                 val processedBody = processResponseBody(result.body, fields, summaryMode ?: false)
+                val bodyText = if (processedBody.isBlank()) "{}" else processedBody
                 CallToolResult(
-                    content = listOf(TextContent("$prefix\n\n$processedBody")),
+                    content = listOf(TextContent(bodyText)),
                     isError = false,
                 )
             }
