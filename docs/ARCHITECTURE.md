@@ -16,7 +16,7 @@ MCP 仕様 **2026-07-28**（ステートレス）に準拠
 * 入力パラメータ:
   * パス / クエリ パラメータ
   * `body`: JSON オブジェクト (リクエストボディ。必要に応じて Known / Required フィールド情報が JSON Schema プロパティとして展開)
-  * `files`: 添付ファイル配列 (multipart/form-data 対応。Base64 文字列 `contentBase64` に加え、ローカルファイルパス `filePath` による直接アタッチに対応。`DISCORD_MCP_ALLOW_FILE_PATH` や `DISCORD_MCP_ALLOWED_FILE_DIR` により範囲・可否を制限可能)
+  * `files`: 添付ファイル配列 (multipart/form-data 対応。Base64 文字列 `contentBase64` に加え、ローカルファイルパス `filePath`、外部 URL / 署名付き URL `url` による直接アタッチに対応。`filePath` は `DISCORD_MCP_ALLOW_FILE_PATH` / `DISCORD_MCP_ALLOWED_FILE_DIR`、`url` は `DISCORD_MCP_ALLOW_FILE_URL` / `DISCORD_MCP_ALLOWED_URL_HOSTS` / `DISCORD_MCP_ALLOW_PRIVATE_URLS` / `DISCORD_MCP_MAX_FILE_URL_BYTES` により範囲・可否を制限可能。`url` のダウンロードは `RemoteAttachmentFetcher` が担当し、SSRF 対策・リダイレクト再検証・サイズ上限を適用)
   * `auditLogReason`: `X-Audit-Log-Reason` ヘッダ
   * `fields`: 応答JSONから指定されたキー/フィールドのみを選択抽出（カンマ区切りまたは配列）。トークン消費量を削減
   * `summaryMode`: `true` の場合、レスポンスをJSONではなく人間/LLM可読な要約テキスト形式に自動整形

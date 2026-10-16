@@ -34,6 +34,10 @@
 | `DISCORD_MCP_ALLOW_AUTH_OVERRIDE` | 任意 | `Boolean` | `false` | `true` の場合、リクエスト単位での Authorization ヘッダの上書き (`authOverride` パラメータ) を許可・スキーマ開示する。無効時はセキュリティ保護のため除外 |
 | `DISCORD_MCP_ALLOW_FILE_PATH` | 任意 | `Boolean` | `true` | `false` の場合、`filePath` によるローカルファイルの読み込みを完全に拒否する（リモート運用時の任意ファイル読み込み防止） |
 | `DISCORD_MCP_ALLOWED_FILE_DIR` | 任意 | `String` | - | `filePath` で読み込みを許可するベースディレクトリ（例: `/var/mcp/uploads`）。指定時、正規化パスによりディレクトリ外への参照 (Path Traversal) をブロックする |
+| `DISCORD_MCP_ALLOW_FILE_URL` | 任意 | `Boolean` | `true` | `false` の場合、`files[].url` による外部 URL / 署名付き URL (Presigned URL) からの添付ファイルダウンロードを無効化する |
+| `DISCORD_MCP_ALLOWED_URL_HOSTS` | 任意 | `CSV` | - | `url` でダウンロードを許可するホスト（カンマ区切り）。`example.com` は完全一致、`*.example.com` はサブドメインに一致（例: `*.amazonaws.com,storage.googleapis.com`）。リモート運用時は設定を推奨 |
+| `DISCORD_MCP_ALLOW_PRIVATE_URLS` | 任意 | `Boolean` | `false` | `true` の場合、ループバック・プライベート・リンクローカル（`169.254.169.254` 等のメタデータ）アドレスへの `url` ダウンロードを許可する。既定では SSRF 対策として拒否 |
+| `DISCORD_MCP_MAX_FILE_URL_BYTES` | 任意 | `Long` | `26214400` (25 MiB) | `url` でダウンロードする添付ファイル1件あたりの最大サイズ（バイト）。超過時はダウンロードを中断しエラーを返す |
 
 ---
 
@@ -176,6 +180,34 @@ MCP ツール呼び出し時（または `discord_call_tool` 使用時）に `pr
   "profile": "admin"
 }
 ```
+
+### 4. 外部 URL / 署名付き URL からの添付ファイル送信
+
+multipart/form-data を受け付けるツール（`discord_create_message` 等）では、`files` の各要素に `url` を指定すると、
+サーバーがその URL からファイルをダウンロードして Discord にアップロードします。S3 / GCS / R2 / Azure SAS などの
+署名付き URL (Presigned URL) をそのまま渡せるため、大きなファイルを Base64 でコンテキストに載せる必要がありません。
+
+```json
+{
+  "channel_id": "123456789012345678",
+  "body": { "content": "レポートを添付します" },
+  "files": [
+    {
+      "url": "https://my-bucket.s3.ap-northeast-1.amazonaws.com/reports/2026-10.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=...",
+      "filename": "report.pdf",
+      "contentType": "application/pdf"
+    }
+  ]
+}
+```
+
+* `filename` / `contentType` は省略可能です。省略時は URL パスの末尾セグメントおよびレスポンスの `Content-Type` が使われます
+* 1要素につき `filePath` → `url` → `contentBase64` の優先順で1つのソースが使われます
+* 署名付き URL のクエリ文字列は改変せずそのまま送信し、Bot トークン (`Authorization` ヘッダ) は送信しません。
+  エラーメッセージにもクエリ文字列（署名）は含めません
+* ダウンロードに失敗した場合（HTTP エラー、サイズ超過、ホスト拒否など）は Discord へのリクエストを行わずエラーを返します
+* SSRF 対策として、既定ではプライベート / ループバック / リンクローカルアドレスへのアクセスを拒否し、リダイレクト先も
+  毎回再検証します（最大5回）。HTTP モードで外部公開する場合は `DISCORD_MCP_ALLOWED_URL_HOSTS` でホストを限定してください
 
 ---
 

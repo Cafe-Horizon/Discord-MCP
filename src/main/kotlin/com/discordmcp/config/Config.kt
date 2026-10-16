@@ -69,6 +69,25 @@ data class AppConfig(
 
     /** Restricts filePath reading to files strictly within this directory if set. */
     val allowedFileDir: String? = System.getenv("DISCORD_MCP_ALLOWED_FILE_DIR")?.takeIf { it.isNotBlank() },
+
+    /** If false, downloading attachments from external / presigned URLs via `url` is disabled. */
+    val allowFileUrl: Boolean = System.getenv("DISCORD_MCP_ALLOW_FILE_URL").toBooleanFlag(default = true),
+
+    /**
+     * If set, `url` attachments may only be downloaded from these hosts. An entry `example.com`
+     * matches exactly; `*.example.com` matches any subdomain.
+     */
+    val allowedUrlHosts: Set<String>? = System.getenv("DISCORD_MCP_ALLOWED_URL_HOSTS")?.toCsvSet(),
+
+    /**
+     * If false (default), `url` attachments resolving to loopback / private / link-local / other
+     * non-public addresses are rejected (SSRF protection).
+     */
+    val allowPrivateUrls: Boolean = System.getenv("DISCORD_MCP_ALLOW_PRIVATE_URLS").toBooleanFlag(default = false),
+
+    /** Maximum size in bytes of a single attachment downloaded via `url`. Defaults to 25 MiB. */
+    val maxFileUrlBytes: Long = System.getenv("DISCORD_MCP_MAX_FILE_URL_BYTES")?.trim()?.toLongOrNull()
+        ?.takeIf { it > 0 } ?: (25L * 1024 * 1024),
 ) {
     companion object {
         private fun parseBotTokens(jsonString: String?, singleToken: String?): Map<String, String> {

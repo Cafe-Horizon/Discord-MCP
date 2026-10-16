@@ -82,7 +82,8 @@ object RestToolRegistrar {
         if (body?.contentType == "multipart/form-data") {
             sb.append(
                 " To attach files, pass 'files' as an array of " +
-                    "{filename, contentType, contentBase64 (or filePath)}.",
+                    "{filename, contentType, and one of contentBase64 / filePath / url}. 'url' accepts an " +
+                    "external or presigned HTTP(S) URL that the server downloads and re-uploads.",
             )
         }
         sb.append(" Full field-level reference: https://docs.discord.com/developers/docs")
@@ -157,7 +158,12 @@ object RestToolRegistrar {
                     put("description", "Optional file attachments.")
                     putJsonObject("items") {
                         put("type", "object")
-                        put("description", "{filename: string, contentType: string, contentBase64: string (or filePath: string)}")
+                        put(
+                            "description",
+                            "{filename: string, contentType: string, and one of contentBase64: string / " +
+                                "filePath: string / url: string (external or presigned HTTP(S) URL; filename and " +
+                                "contentType default to the URL's last path segment and response Content-Type)}",
+                        )
                     }
                 }
             }
