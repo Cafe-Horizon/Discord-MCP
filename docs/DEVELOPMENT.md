@@ -11,6 +11,7 @@ src/main/kotlin/com/discordmcp/
   discord/EndpointFilter.kt    # カテゴリ・正規表現・Readonly フィルタ
   discord/EndpointExecutor.kt  # リクエスト検証・実行・結果整形ロジック
   discord/DiscordHttpClient.kt # HTTPクライアント (認証・レートリミット・multipart対応)
+  discord/RemoteAttachmentFetcher.kt # 外部 / 署名付き URL からの添付ファイル取得 (SSRF 対策付き)
   discord/DiscordResult.kt     # REST呼び出し結果型
   discord/RestToolRegistrar.kt # 244 エンドポイントの MCP ツール登録
   discord/LazyToolRegistrar.kt # 動的ツール検索モード (discord_search_tools / discord_call_tool) の登録

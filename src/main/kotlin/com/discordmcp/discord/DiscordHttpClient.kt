@@ -52,6 +52,8 @@ class DiscordHttpClient(
         }
     }
 
+    private val attachmentFetcher = RemoteAttachmentFetcher(config)
+
     suspend fun execute(
         spec: EndpointSpec,
         pathValues: Map<String, String>,
@@ -80,6 +82,19 @@ class DiscordHttpClient(
                 else -> config.botToken?.let { "Bot $it" }
             }
 
+        // Resolved once, before the retry loop, so a 429 retry does not re-read or re-download files.
+        val attachments = if (spec.body?.contentType == "multipart/form-data" && files != null) {
+            try {
+                resolveAttachments(files)
+            } catch (e: AttachmentFetchException) {
+                return DiscordResult.Error(0, "Attachment Fetch Failed", e.message ?: "Failed to download attachment.")
+            } catch (e: Exception) {
+                return DiscordResult.Error(0, "Attachment Error", "Failed to prepare attachment: ${e.message}")
+            }
+        } else {
+            emptyList()
+        }
+
         var attempt = 0
         while (true) {
             attempt++
@@ -101,52 +116,15 @@ class DiscordHttpClient(
                                 if (bodyObject != null) {
                                     append("payload_json", json.encodeToString(JsonObject.serializer(), bodyObject))
                                 }
-                                files?.forEachIndexed { index, element ->
-                                    val obj = element.jsonObject
-                                    val filename = obj["filename"]?.jsonPrimitive?.contentOrNull ?: "file$index"
-                                    val b64 = obj["contentBase64"]?.jsonPrimitive?.contentOrNull
-                                    val filePath = obj["filePath"]?.jsonPrimitive?.contentOrNull
-                                    val mime = obj["contentType"]?.jsonPrimitive?.contentOrNull ?: "application/octet-stream"
-                                    val bytes = when {
-                                        filePath != null -> try {
-                                            if (!config.allowFilePath) {
-                                                System.err.println("[discord-mcp] SECURITY WARNING: filePath reading is disabled (DISCORD_MCP_ALLOW_FILE_PATH=false). Skipping '$filePath'")
-                                                null
-                                            } else {
-                                                val targetFile = java.io.File(filePath).canonicalFile
-                                                val allowedDir = config.allowedFileDir?.let { java.io.File(it).canonicalFile }
-                                                // Path.startsWith (java.nio) compares path *segments*, not raw
-                                                // characters, so a sibling directory that merely shares a string
-                                                // prefix (e.g. targetFile in "/data/allowed-evil" against an
-                                                // allowedDir of "/data/allowed") is correctly rejected. The old
-                                                // `targetFile.path.startsWith(allowedDir.path)` string comparison
-                                                // let that sibling-directory case slip through.
-                                                if (allowedDir != null && !targetFile.toPath().startsWith(allowedDir.toPath())) {
-                                                    System.err.println("[discord-mcp] SECURITY WARNING: filePath '$filePath' is outside allowed directory '${allowedDir.path}'. Access denied.")
-                                                    null
-                                                } else if (targetFile.exists() && targetFile.isFile) {
-                                                    targetFile.readBytes()
-                                                } else {
-                                                    null
-                                                }
-                                            }
-                                        } catch (e: Exception) {
-                                            System.err.println("[discord-mcp] Error reading file at $filePath: ${e.message}")
-                                            null
-                                        }
-                                        b64 != null -> Base64.getDecoder().decode(b64)
-                                        else -> null
-                                    }
-                                    if (bytes != null) {
-                                        append(
-                                            "files[$index]",
-                                            bytes,
-                                            io.ktor.http.Headers.build {
-                                                append(HttpHeaders.ContentType, mime)
-                                                append(HttpHeaders.ContentDisposition, "form-data; name=\"files[$index]\"; filename=\"$filename\"")
-                                            },
-                                        )
-                                    }
+                                for (part in attachments) {
+                                    append(
+                                        "files[${part.index}]",
+                                        part.bytes,
+                                        io.ktor.http.Headers.build {
+                                            append(HttpHeaders.ContentType, part.contentType)
+                                            append(HttpHeaders.ContentDisposition, "form-data; name=\"files[${part.index}]\"; filename=\"${part.filename}\"")
+                                        },
+                                    )
                                 }
                             }
                             setBody(MultiPartFormDataContent(parts))
@@ -203,6 +181,73 @@ class DiscordHttpClient(
         }
     }
 
+    private class AttachmentPart(val index: Int, val filename: String, val contentType: String, val bytes: ByteArray)
+
+    /**
+     * Turns the tool's `files` array into multipart parts. Each item supplies its bytes via one of
+     * `filePath` (local file), `url` (HTTP(S) / presigned URL, see [RemoteAttachmentFetcher]) or
+     * `contentBase64`, checked in that order. Unreadable local files are skipped with a warning
+     * (existing behavior); a failed URL download aborts the whole call with
+     * [AttachmentFetchException], since silently dropping a remote attachment is rarely intended.
+     */
+    private suspend fun resolveAttachments(files: JsonArray): List<AttachmentPart> =
+        files.mapIndexedNotNull { index, element ->
+            val obj = element.jsonObject
+            val filename = obj["filename"]?.jsonPrimitive?.contentOrNull
+            val b64 = obj["contentBase64"]?.jsonPrimitive?.contentOrNull
+            val filePath = obj["filePath"]?.jsonPrimitive?.contentOrNull
+            val url = obj["url"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+            val mime = obj["contentType"]?.jsonPrimitive?.contentOrNull
+            when {
+                filePath != null -> readLocalFile(filePath)?.let {
+                    AttachmentPart(index, filename ?: "file$index", mime ?: "application/octet-stream", it)
+                }
+                url != null -> {
+                    val fetched = attachmentFetcher.fetch(url)
+                    AttachmentPart(
+                        index = index,
+                        filename = filename ?: fetched.filename ?: "file$index",
+                        contentType = mime ?: fetched.contentType ?: "application/octet-stream",
+                        bytes = fetched.bytes,
+                    )
+                }
+                b64 != null -> AttachmentPart(
+                    index,
+                    filename ?: "file$index",
+                    mime ?: "application/octet-stream",
+                    Base64.getDecoder().decode(b64),
+                )
+                else -> null
+            }
+        }
+
+    private fun readLocalFile(filePath: String): ByteArray? = try {
+        if (!config.allowFilePath) {
+            System.err.println("[discord-mcp] SECURITY WARNING: filePath reading is disabled (DISCORD_MCP_ALLOW_FILE_PATH=false). Skipping '$filePath'")
+            null
+        } else {
+            val targetFile = java.io.File(filePath).canonicalFile
+            val allowedDir = config.allowedFileDir?.let { java.io.File(it).canonicalFile }
+            // Path.startsWith (java.nio) compares path *segments*, not raw
+            // characters, so a sibling directory that merely shares a string
+            // prefix (e.g. targetFile in "/data/allowed-evil" against an
+            // allowedDir of "/data/allowed") is correctly rejected. The old
+            // `targetFile.path.startsWith(allowedDir.path)` string comparison
+            // let that sibling-directory case slip through.
+            if (allowedDir != null && !targetFile.toPath().startsWith(allowedDir.toPath())) {
+                System.err.println("[discord-mcp] SECURITY WARNING: filePath '$filePath' is outside allowed directory '${allowedDir.path}'. Access denied.")
+                null
+            } else if (targetFile.exists() && targetFile.isFile) {
+                targetFile.readBytes()
+            } else {
+                null
+            }
+        }
+    } catch (e: Exception) {
+        System.err.println("[discord-mcp] Error reading file at $filePath: ${e.message}")
+        null
+    }
+
     private fun extractRetryAfter(body: String): Double? = runCatching {
         json.parseToJsonElement(body).jsonObject["retry_after"]?.jsonPrimitive?.doubleOrNull
     }.getOrNull()
@@ -210,5 +255,8 @@ class DiscordHttpClient(
     private fun encodePathSegment(value: String): String =
         URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
-    fun close() = engine.close()
+    fun close() {
+        engine.close()
+        attachmentFetcher.close()
+    }
 }
