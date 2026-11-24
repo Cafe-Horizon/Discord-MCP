@@ -53,6 +53,28 @@ object InteractionTools {
                     putJsonObject("components") {
                         put("type", "array")
                         put("description", "Optional list of ActionRow message components.")
+                        putJsonObject("items") {
+                            put("type", "object")
+                            put(
+                                "description",
+                                "An ActionRow: {type: 1, components: [button / select menu objects]}. " +
+                                    "Same shape as the Discord API 'components' field.",
+                            )
+                            putJsonObject("properties") {
+                                putJsonObject("type") {
+                                    put("type", "integer")
+                                    put("description", "Component type; 1 = ActionRow.")
+                                }
+                                putJsonObject("components") {
+                                    put("type", "array")
+                                    put("description", "Child components of the ActionRow (buttons, select menus).")
+                                    putJsonObject("items") {
+                                        put("type", "object")
+                                        put("description", "A button or select menu object as defined by the Discord API.")
+                                    }
+                                }
+                            }
+                        }
                     }
                 },
                 required = listOf("interaction_id", "interaction_token"),

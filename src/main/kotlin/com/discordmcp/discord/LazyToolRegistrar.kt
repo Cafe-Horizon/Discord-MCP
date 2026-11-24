@@ -149,6 +149,15 @@ object LazyToolRegistrar {
                         put("type", "array")
                         put("description", "Optional file attachments: [{filename, contentType, and one of contentBase64 / " +
                             "filePath / url (external or presigned HTTP(S) URL downloaded by the server)}].")
+                        putJsonObject("items") {
+                            put("type", "object")
+                            put(
+                                "description",
+                                "{filename: string, contentType: string, and one of contentBase64: string / " +
+                                    "filePath: string / url: string (external or presigned HTTP(S) URL; filename and " +
+                                    "contentType default to the URL's last path segment and response Content-Type)}",
+                            )
+                        }
                     }
                     putJsonObject("auditLogReason") {
                         put("type", "string")
